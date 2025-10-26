@@ -96,6 +96,10 @@ class Oracle:
                 'backward_barrier_eV',
                 'E_initial_eV',
                 'E_final_eV',
+                'initial_relax_time_s',
+                'final_relax_time_s',
+                'neb_time_s',
+                'total_time_s',
                 'structure_folder',
                 'timestamp'
             ])
@@ -298,8 +302,12 @@ class Oracle:
             Relaxed structure
         energy : float
             Final energy in eV
+        relax_time : float
+            Relaxation time in seconds
         """
         from chgnet.model.dynamics import StructOptimizer
+        
+        relax_start = time.time()
         
         with suppress_output():
             relaxer = StructOptimizer()
@@ -311,6 +319,8 @@ class Oracle:
                 verbose=False
             )
         
+        relax_time = time.time() - relax_start
+        
         relaxed_structure = result['final_structure']
         relaxed_atoms = relaxed_structure.to_ase_atoms()
         energy = result['trajectory'].energies[-1]  # Final energy
@@ -320,7 +330,7 @@ class Oracle:
         del result
         gc.collect()
         
-        return relaxed_atoms, energy
+        return relaxed_atoms, energy, relax_time
     
     def _run_neb(self, initial_relaxed, final_relaxed):
         """
@@ -343,8 +353,12 @@ class Oracle:
             Energies of all NEB images (eV)
         images : list
             All NEB images (ase.Atoms objects)
+        neb_time : float
+            NEB calculation time in seconds
         """
         from chgnet.model.dynamics import CHGNetCalculator
+        
+        neb_start = time.time()
         
         n_images = self.config.neb_images
         
@@ -380,6 +394,8 @@ class Oracle:
                 steps=self.config.neb_max_steps
             )
         
+        neb_time = time.time() - neb_start
+        
         # Calculate energies and barriers
         neb_energies = [img.get_potential_energy() for img in images]
         max_energy = max(neb_energies)
@@ -401,7 +417,7 @@ class Oracle:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         
-        return forward_barrier, backward_barrier, neb_energies, images_copy
+        return forward_barrier, backward_barrier, neb_energies, images_copy, neb_time
     
     def calculate(self, composition: dict):
         """
@@ -442,7 +458,7 @@ class Oracle:
             initial_unrelaxed, center_idx, center_pos = self._create_vacancy_at_center(structure)
             
             # 3. Relax initial structure
-            initial_relaxed, E_initial = self._relax_structure(initial_unrelaxed.copy())
+            initial_relaxed, E_initial, initial_relax_time = self._relax_structure(initial_unrelaxed.copy())
             
             # 4. Pick random neighbor
             neighbors = self._get_nearest_neighbors(initial_unrelaxed, center_pos, n_neighbors=8)
@@ -453,13 +469,15 @@ class Oracle:
             final_unrelaxed.positions[chosen_neighbor] = center_pos
             
             # 6. Relax final structure
-            final_relaxed, E_final = self._relax_structure(final_unrelaxed.copy())
+            final_relaxed, E_final, final_relax_time = self._relax_structure(final_unrelaxed.copy())
             
             # 7. Run NEB
-            forward_barrier, backward_barrier, neb_energies, neb_images = self._run_neb(
+            forward_barrier, backward_barrier, neb_energies, neb_images, neb_time = self._run_neb(
                 initial_relaxed.copy(),
                 final_relaxed.copy()
             )
+            
+            total_time = time.time() - calc_start
             
             # 8. Save everything
             run_dir = self.database_dir / comp_string / f"run_{run_number}"
@@ -487,8 +505,13 @@ class Oracle:
                 'forward_barrier_eV': float(forward_barrier),
                 'backward_barrier_eV': float(backward_barrier),
                 'neb_energies_eV': [float(e) for e in neb_energies],
-                'neb_converged': True,  # If we got here, it converged
-                'calculation_time_seconds': time.time() - calc_start,
+                'neb_converged': True,
+                'timing': {
+                    'initial_relax_s': float(initial_relax_time),
+                    'final_relax_s': float(final_relax_time),
+                    'neb_s': float(neb_time),
+                    'total_s': float(total_time)
+                },
                 'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             }
             
@@ -506,21 +529,25 @@ class Oracle:
                     row.append(composition.get(elem, 0.0))
                 row.extend([
                     run_number,
-                    'CHGNet',  # Calculator
-                    'CHGNet-pretrained',  # Model
+                    'CHGNet',
+                    'CHGNet-pretrained',
                     f"{forward_barrier:.6f}",
                     f"{backward_barrier:.6f}",
                     f"{E_initial:.6f}",
                     f"{E_final:.6f}",
+                    f"{initial_relax_time:.2f}",
+                    f"{final_relax_time:.2f}",
+                    f"{neb_time:.2f}",
+                    f"{total_time:.2f}",
                     str(run_dir),
                     timestamp
                 ])
                 writer.writerow(row)
             
-            total_time = time.time() - calc_start
             print(f"✓ Completed in {total_time:.1f}s")
             print(f"  Forward barrier: {forward_barrier:.3f} eV")
             print(f"  Backward barrier: {backward_barrier:.3f} eV")
+            print(f"  Timing: relax={initial_relax_time+final_relax_time:.1f}s, neb={neb_time:.1f}s")
             
             return True
             
