@@ -29,7 +29,7 @@ class Config:
     # ============================================================
     # NEB PARAMETERS
     # ============================================================
-    neb_images: int = 5                  # Number of NEB images (including initial and final)
+    neb_images: int = 3                  # Number of NEB images (min. 3)
     neb_fmax: float = 0.05               # Force convergence criterion (eV/Angstrom)
     neb_max_steps: int = 200             # Maximum NEB optimization steps
     neb_spring_constant: float = 0.5     # Spring constant for NEB
