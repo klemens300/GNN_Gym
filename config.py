@@ -38,7 +38,7 @@ class Config:
     # ============================================================
     # CHGNET RELAXATION
     # ============================================================
-    relax_fmax: float = 0.005             # Force convergence for structure relaxation
+    relax_fmax: float = 0.05             # Force convergence for structure relaxation
     relax_max_steps: int = 500           # Maximum relaxation steps
     relax_cell: bool = False             # If True, relax cell; if False, only atoms
     
