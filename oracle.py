@@ -92,6 +92,7 @@ class Oracle:
                 'run_number',
                 'calculator',
                 'model',
+                'diffusing_element',
                 'forward_barrier_eV',
                 'backward_barrier_eV',
                 'E_initial_eV',
@@ -464,6 +465,9 @@ class Oracle:
             neighbors = self._get_nearest_neighbors(initial_unrelaxed, center_pos, n_neighbors=8)
             chosen_neighbor = np.random.choice(neighbors)
             
+            # Get the element of the diffusing atom
+            diffusing_element = initial_unrelaxed.get_chemical_symbols()[chosen_neighbor]
+            
             # 5. Create final structure (neighbor jumps to vacancy)
             final_unrelaxed = initial_unrelaxed.copy()
             final_unrelaxed.positions[chosen_neighbor] = center_pos
@@ -500,6 +504,7 @@ class Oracle:
                 'run_number': run_number,
                 'calculator': 'CHGNet',
                 'model': 'CHGNet-pretrained',
+                'diffusing_element': diffusing_element,
                 'E_initial_eV': float(E_initial),
                 'E_final_eV': float(E_final),
                 'forward_barrier_eV': float(forward_barrier),
@@ -531,6 +536,7 @@ class Oracle:
                     run_number,
                     'CHGNet',
                     'CHGNet-pretrained',
+                    diffusing_element,
                     f"{forward_barrier:.6f}",
                     f"{backward_barrier:.6f}",
                     f"{E_initial:.6f}",
@@ -545,6 +551,7 @@ class Oracle:
                 writer.writerow(row)
             
             print(f"✓ Completed in {total_time:.1f}s")
+            print(f"  Diffusing element: {diffusing_element}")
             print(f"  Forward barrier: {forward_barrier:.3f} eV")
             print(f"  Backward barrier: {backward_barrier:.3f} eV")
             print(f"  Timing: relax={initial_relax_time+final_relax_time:.1f}s, neb={neb_time:.1f}s")

@@ -29,7 +29,7 @@ class Config:
     # ============================================================
     # NEB PARAMETERS
     # ============================================================
-    neb_images: int = 3                  # Number of NEB images (min. 3)
+    neb_images: int = 5                  # Number of NEB images (including initial and final)
     neb_fmax: float = 0.05               # Force convergence criterion (eV/Angstrom)
     neb_max_steps: int = 200             # Maximum NEB optimization steps
     neb_spring_constant: float = 0.5     # Spring constant for NEB
@@ -38,20 +38,33 @@ class Config:
     # ============================================================
     # CHGNET RELAXATION
     # ============================================================
-    relax_fmax: float = 0.05             # Force convergence for structure relaxation
+    relax_fmax: float = 0.005             # Force convergence for structure relaxation
     relax_max_steps: int = 500           # Maximum relaxation steps
     relax_cell: bool = False             # If True, relax cell; if False, only atoms
     
     # ============================================================
     # DATA STORAGE
     # ============================================================
-    database_dir: str = "neb_database"   # Main database directory
-    csv_path: str = "data.csv"           # CSV file for metadata
+    database_name: str = "database"   # Database directory name
+    csv_name: str = "database_navi.csv"   # CSV filename for results
     
     # ============================================================
     # RANDOM SEED
     # ============================================================
     random_seed: int = 42                # For reproducibility
+    
+    # ============================================================
+    # DERIVED PATHS (don't change these)
+    # ============================================================
+    @property
+    def database_dir(self) -> str:
+        """Full path to database directory"""
+        return self.database_name
+    
+    @property
+    def csv_path(self) -> str:
+        """Full path to CSV file"""
+        return self.csv_name
 
 
 if __name__ == "__main__":
@@ -80,7 +93,9 @@ if __name__ == "__main__":
     print(f"  Relax cell: {config.relax_cell}")
     
     print("\nDATA STORAGE:")
+    print(f"  Database name: {config.database_name}")
     print(f"  Database directory: {config.database_dir}")
+    print(f"  CSV name: {config.csv_name}")
     print(f"  CSV path: {config.csv_path}")
     
     print("\n" + "="*70)
