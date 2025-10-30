@@ -6,6 +6,7 @@ All settings in one place for easy management.
 
 from dataclasses import dataclass, field
 from typing import List
+from datetime import datetime
 
 
 @dataclass
@@ -77,45 +78,65 @@ class Config:
     scheduler_step_size: int = 100       # Step size for StepLR (step)
     scheduler_t_max: int = 500           # T_max for CosineAnnealingLR (cosine)
     scheduler_eta_min: float = 1e-6      # Minimum LR for CosineAnnealingLR (cosine)
-
-
-# Alternative configurations
-def get_fast_config() -> Config:
-    """
-    Fast config for testing/debugging.
-    Small model, few epochs.
-    """
-    config = Config()
-    config.gnn_hidden_dim = 32
-    config.gnn_num_layers = 3
-    config.gnn_embedding_dim = 32
-    config.mlp_hidden_dims = [256, 128]
-    config.batch_size = 8
-    config.epochs = 100
-    config.patience = 10
-    config.scheduler_patience = 5
-    config.scheduler_t_max = 100
-    return config
-
-
-def get_production_config() -> Config:
-    """
-    Production config for best performance.
-    Large model, many epochs.
-    """
-    config = Config()
-    config.gnn_hidden_dim = 128
-    config.gnn_num_layers = 8
-    config.gnn_embedding_dim = 128
-    config.mlp_hidden_dims = [2048, 1024, 512, 256]
-    config.batch_size = 32
-    config.epochs = 5000
-    config.patience = 100
-    config.learning_rate = 3e-4
-    config.scheduler_patience = 20
-    config.scheduler_t_max = 2000
-    config.scheduler_type = "cosine"  # Cosine annealing für lange Trainings
-    return config
+    
+    # ============================================================
+    # LOGGING (Weights & Biases)
+    # ============================================================
+    use_wandb: bool = True                    # Enable/disable wandb
+    wandb_project: str = "diffusion-barrier"  # Wandb project name
+    wandb_entity: str = None                  # Wandb entity (username/team), None = default
+    wandb_run_name: str = None                # Run name, None = auto-generated
+    wandb_tags: List[str] = field(default_factory=list)  # Tags for the run
+    wandb_notes: str = ""                     # Notes for the run
+    wandb_log_interval: int = 1               # Log every N epochs
+    wandb_watch_model: bool = True            # Watch model gradients
+    wandb_watch_freq: int = 100               # Watch frequency (batches)
+    
+    def get_model_name(self) -> str:
+        """
+        Generate a descriptive model name based on configuration.
+        
+        Format: {timestamp}-GNN-{layers}x{hidden}-MLP-{mlp_structure}-{scheduler}
+        
+        Returns:
+            model_name: Descriptive model name
+        
+        Example:
+            "20241030-143522-GNN-5x64-MLP-1024-512-256-plateau"
+        """
+        # Timestamp first for easy sorting
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        
+        # MLP structure as string
+        mlp_str = "-".join(map(str, self.mlp_hidden_dims))
+        
+        # Scheduler type
+        scheduler = self.scheduler_type if self.use_scheduler else "none"
+        
+        # Build name (timestamp first!)
+        model_name = (
+            f"{timestamp}-"
+            f"GNN-{self.gnn_num_layers}x{self.gnn_hidden_dim}-"
+            f"MLP-{mlp_str}-"
+            f"{scheduler}"
+        )
+        
+        return model_name
+    
+    def get_experiment_name(self) -> str:
+        """
+        Generate experiment name for wandb with timestamp.
+        
+        Format: {date}-{time}-GNN
+        
+        Returns:
+            experiment_name: Simple experiment name with timestamp
+        
+        Example:
+            "20241030-143522-GNN"
+        """
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        return f"{timestamp}-GNN"
 
 
 # Display config
@@ -169,21 +190,19 @@ if __name__ == "__main__":
     print(f"  scheduler_t_max: {config.scheduler_t_max}")
     print(f"  scheduler_eta_min: {config.scheduler_eta_min}")
     
-    print("\n" + "="*70)
+    print("\nLOGGING (Weights & Biases):")
+    print(f"  use_wandb: {config.use_wandb}")
+    print(f"  wandb_project: {config.wandb_project}")
+    print(f"  wandb_entity: {config.wandb_entity}")
+    print(f"  wandb_run_name: {config.wandb_run_name}")
+    print(f"  wandb_tags: {config.wandb_tags}")
+    print(f"  wandb_notes: {config.wandb_notes}")
+    print(f"  wandb_log_interval: {config.wandb_log_interval}")
+    print(f"  wandb_watch_model: {config.wandb_watch_model}")
+    print(f"  wandb_watch_freq: {config.wandb_watch_freq}")
     
-    # Alternative configs
-    print("\nALTERNATIVE CONFIGURATIONS:")
-    
-    print("\n1. Fast Config (testing):")
-    fast = get_fast_config()
-    print(f"   Model: {fast.gnn_hidden_dim}D hidden, {fast.gnn_num_layers} layers")
-    print(f"   Training: {fast.epochs} epochs, batch {fast.batch_size}")
-    print(f"   Scheduler: {fast.scheduler_type}")
-    
-    print("\n2. Production Config (best performance):")
-    prod = get_production_config()
-    print(f"   Model: {prod.gnn_hidden_dim}D hidden, {prod.gnn_num_layers} layers")
-    print(f"   Training: {prod.epochs} epochs, batch {prod.batch_size}")
-    print(f"   Scheduler: {prod.scheduler_type}")
+    print("\nGENERATED NAMES:")
+    print(f"  Model name: {config.get_model_name()}")
+    print(f"  Experiment name: {config.get_experiment_name()}")
     
     print("\n" + "="*70)

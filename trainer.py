@@ -1,15 +1,22 @@
 """
 Trainer for Diffusion Barrier Prediction
 
-Handles training loop, validation, checkpointing, and early stopping.
+Handles training loop, validation, checkpointing, early stopping, and logging.
 """
 
 import torch
 import torch.nn as nn
 from pathlib import Path
 import json
-from tqdm import tqdm
 from typing import Optional
+
+# Wandb import (optional, graceful fallback)
+try:
+    import wandb
+    WANDB_AVAILABLE = True
+except ImportError:
+    WANDB_AVAILABLE = False
+    print("Warning: wandb not installed. Install with: pip install wandb")
 
 
 class Trainer:
@@ -22,6 +29,7 @@ class Trainer:
     - Checkpoint saving/loading
     - Learning rate scheduling (flexible: plateau, cosine, step)
     - Training history tracking
+    - Weights & Biases integration
     """
     
     def __init__(self, model, config, save_dir: str = "checkpoints"):
@@ -64,6 +72,74 @@ class Trainer:
             'val_mae': [],
             'learning_rates': []
         }
+        
+        # Wandb initialization
+        self.use_wandb = config.use_wandb and WANDB_AVAILABLE
+        if self.use_wandb:
+            self._init_wandb()
+    
+    def _init_wandb(self):
+        """Initialize Weights & Biases logging."""
+        # Prepare config dict for wandb
+        wandb_config = {
+            # Model architecture
+            'gnn_hidden_dim': self.config.gnn_hidden_dim,
+            'gnn_num_layers': self.config.gnn_num_layers,
+            'gnn_embedding_dim': self.config.gnn_embedding_dim,
+            'mlp_hidden_dims': self.config.mlp_hidden_dims,
+            'dropout': self.config.dropout,
+            
+            # Training
+            'learning_rate': self.config.learning_rate,
+            'weight_decay': self.config.weight_decay,
+            'batch_size': self.config.batch_size,
+            'epochs': self.config.epochs,
+            'patience': self.config.patience,
+            'gradient_clip_norm': self.config.gradient_clip_norm,
+            
+            # Scheduler
+            'scheduler_type': self.config.scheduler_type if self.config.use_scheduler else 'none',
+            'scheduler_factor': self.config.scheduler_factor,
+            'scheduler_patience': self.config.scheduler_patience,
+            
+            # Data
+            'min_barrier': self.config.min_barrier,
+            'max_barrier': self.config.max_barrier,
+            'val_split': self.config.val_split,
+            
+            # Graph
+            'cutoff_radius': self.config.cutoff_radius,
+            'max_neighbors': self.config.max_neighbors,
+            'supercell_size': self.config.supercell_size,
+        }
+        
+        # Generate run name if not provided
+        run_name = self.config.wandb_run_name
+        if run_name is None:
+            run_name = self.config.get_experiment_name()
+        
+        # Initialize wandb
+        wandb.init(
+            project=self.config.wandb_project,
+            entity=self.config.wandb_entity,
+            name=run_name,
+            tags=self.config.wandb_tags,
+            notes=self.config.wandb_notes,
+            config=wandb_config,
+            dir=str(self.save_dir)
+        )
+        
+        # Watch model (gradients and parameters)
+        if self.config.wandb_watch_model:
+            wandb.watch(
+                self.model,
+                log='all',
+                log_freq=self.config.wandb_watch_freq
+            )
+        
+        print(f"✓ Wandb initialized: {wandb.run.name}")
+        print(f"  Project: {self.config.wandb_project}")
+        print(f"  URL: {wandb.run.url}")
     
     def _create_scheduler(self):
         """
@@ -141,10 +217,13 @@ class Trainer:
         n_batches = 0
         
         for batch in train_loader:
+            # Unpack tuple from dataloader
+            initial_graphs, final_graphs, barriers = batch
+            
             # Move data to device
-            initial_graphs = batch['initial'].to(self.device)
-            final_graphs = batch['final'].to(self.device)
-            barriers = batch['barrier'].to(self.device)
+            initial_graphs = initial_graphs.to(self.device)
+            final_graphs = final_graphs.to(self.device)
+            barriers = barriers.to(self.device)
             
             # Forward pass
             predictions = self.model(initial_graphs, final_graphs)
@@ -193,10 +272,13 @@ class Trainer:
         n_batches = 0
         
         for batch in val_loader:
+            # Unpack tuple from dataloader
+            initial_graphs, final_graphs, barriers = batch
+            
             # Move data to device
-            initial_graphs = batch['initial'].to(self.device)
-            final_graphs = batch['final'].to(self.device)
-            barriers = batch['barrier'].to(self.device)
+            initial_graphs = initial_graphs.to(self.device)
+            final_graphs = final_graphs.to(self.device)
+            barriers = barriers.to(self.device)
             
             # Forward pass
             predictions = self.model(initial_graphs, final_graphs)
@@ -236,6 +318,10 @@ class Trainer:
                 print(f"Scheduler: {self.config.scheduler_type}")
             else:
                 print("Scheduler: None")
+            if self.use_wandb:
+                print(f"Wandb: Enabled ({wandb.run.name})")
+            else:
+                print("Wandb: Disabled")
             print(f"Max epochs: {self.config.epochs}")
             print(f"Early stopping patience: {self.config.patience}")
             print("="*70 + "\n")
@@ -259,6 +345,18 @@ class Trainer:
             self.history['val_mae'].append(val_mae)
             self.history['learning_rates'].append(current_lr)
             
+            # Log to wandb
+            if self.use_wandb and (epoch % self.config.wandb_log_interval == 0):
+                wandb.log({
+                    'epoch': epoch + 1,
+                    'train/loss': train_loss,
+                    'train/mae': train_mae,
+                    'val/loss': val_loss,
+                    'val/mae': val_mae,
+                    'learning_rate': current_lr,
+                    'patience_counter': self.patience_counter
+                })
+            
             # Print progress
             if verbose:
                 print(f"Epoch {epoch+1:4d}/{self.config.epochs} | "
@@ -281,6 +379,12 @@ class Trainer:
                     filepath=self.save_dir / "best_model.pt",
                     is_best=True
                 )
+                
+                # Log best model to wandb
+                if self.use_wandb:
+                    wandb.run.summary['best_val_loss'] = val_loss
+                    wandb.run.summary['best_val_mae'] = val_mae
+                    wandb.run.summary['best_epoch'] = epoch + 1
                 
                 if verbose:
                     print(f"  → New best model! Val loss: {val_loss:.4f}")
@@ -306,6 +410,19 @@ class Trainer:
         
         # Save final history
         self.save_history()
+        
+        # Finish wandb run
+        if self.use_wandb:
+            # Save best model artifact
+            artifact = wandb.Artifact(
+                name=f'model-{wandb.run.id}',
+                type='model',
+                description=f'Best model from run {wandb.run.name}'
+            )
+            artifact.add_file(str(self.save_dir / "best_model.pt"))
+            wandb.log_artifact(artifact)
+            
+            wandb.finish()
         
         if verbose:
             print("\n" + "="*70)
