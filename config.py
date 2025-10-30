@@ -1,6 +1,7 @@
 """
-Central configuration for all parameters.
-Everything adjustable in one place!
+Configuration for Diffusion Barrier Prediction
+
+All settings in one place for easy management.
 """
 
 from dataclasses import dataclass, field
@@ -9,103 +10,165 @@ from typing import List
 
 @dataclass
 class Config:
-    """
-    Central configuration for NEB calculations and data generation.
-    All parameters can be adjusted here.
-    """
+    """Complete configuration for the project"""
     
     # ============================================================
-    # BCC STRUCTURE
+    # PATHS
     # ============================================================
-    supercell_size: int = 4              # Size of BCC supercell (e.g., 4 = 4x4x4)
-    lattice_parameter: float = 3.2       # BCC lattice parameter in Angstrom
+    csv_path: str = "database_navi.csv"
+    checkpoint_dir: str = "checkpoints"
     
     # ============================================================
-    # ELEMENTS
+    # CRYSTAL STRUCTURE
     # ============================================================
-    elements: List[str] = field(default_factory=lambda: ['Mo', 'Nb', 'Ta', 'W'])
-    # Can be changed to any elements, e.g., ['Fe', 'Cr', 'Ni']
+    supercell_size: int = 4              # BCC supercell size (4x4x4)
+    lattice_parameter: float = 3.2       # BCC lattice parameter (Angstrom)
     
     # ============================================================
-    # NEB PARAMETERS
+    # GRAPH CONSTRUCTION
     # ============================================================
-    neb_images: int = 3                  # Number of NEB images (including initial and final)
-    neb_fmax: float = 0.05               # Force convergence criterion (eV/Angstrom)
-    neb_max_steps: int = 200             # Maximum NEB optimization steps
-    neb_spring_constant: float = 0.5     # Spring constant for NEB
-    neb_climb: bool = True               # Use climbing image NEB
+    cutoff_radius: float = 3.5           # Neighbor cutoff radius (Angstrom)
+    max_neighbors: int = 50              # Maximum neighbors per atom
     
     # ============================================================
-    # CHGNET RELAXATION
+    # DATA
     # ============================================================
-    relax_fmax: float = 0.05             # Force convergence for structure relaxation
-    relax_max_steps: int = 500           # Maximum relaxation steps
-    relax_cell: bool = False             # If True, relax cell; if False, only atoms
+    batch_size: int = 32                 # Batch size for training
+    num_workers: int = 0                 # DataLoader workers (0 for debugging)
+    
+    # Data cleanup (barrier filtering)
+    min_barrier: float = 0.1             # Minimum barrier (eV) - removes noise
+    max_barrier: float = 15.0             # Maximum barrier (eV) - removes slow diffusion
+    
+    # Train/Val split
+    val_split: float = 0.1               # Validation split ratio (10%)
+    random_seed: int = 42                # Random seed for reproducibility
     
     # ============================================================
-    # GRAPH BUILDER
+    # MODEL ARCHITECTURE
     # ============================================================
-    cutoff_radius: float = 3.5           # Cutoff radius for edges (Angstrom)
-    max_neighbors: int = 50              # Maximum number of neighbors per atom
+    # GNN Encoder
+    gnn_hidden_dim: int = 64             # Hidden dimension for GNN layers
+    gnn_num_layers: int = 5              # Number of message passing layers
+    gnn_embedding_dim: int = 64          # Output dimension of GNN encoder
+    
+    # MLP Predictor
+    mlp_hidden_dims: List[int] = field(default_factory=lambda: [1024, 512, 256])
+    dropout: float = 0.15                # Dropout rate
     
     # ============================================================
-    # DATA STORAGE
+    # TRAINING
     # ============================================================
-    database_name: str = "database"      # Database directory name
-    csv_name: str = "database_navi.csv"  # CSV filename for results
+    # Optimization
+    learning_rate: float = 5e-4          # Initial learning rate
+    weight_decay: float = 0.01           # L2 regularization (AdamW)
+    gradient_clip_norm: float = 1.0      # Max gradient norm
     
-    # ============================================================
-    # RANDOM SEED
-    # ============================================================
-    random_seed: int = 42                # For reproducibility
+    # Training loop
+    epochs: int = 1000                   # Maximum number of epochs
+    patience: int = 50                   # Early stopping patience
+    save_interval: int = 50              # Save checkpoint every N epochs
     
-    # ============================================================
-    # DERIVED PATHS (don't change these)
-    # ============================================================
-    @property
-    def database_dir(self) -> str:
-        """Full path to database directory"""
-        return self.database_name
-    
-    @property
-    def csv_path(self) -> str:
-        """Full path to CSV file"""
-        return self.csv_name
+    # Learning rate scheduling
+    use_scheduler: bool = True           # Use learning rate scheduler
+    scheduler_factor: float = 0.5        # Reduce LR by this factor
+    scheduler_patience: int = 10         # Patience for LR reduction
 
 
+# Alternative configurations
+def get_fast_config() -> Config:
+    """
+    Fast config for testing/debugging.
+    Small model, few epochs.
+    """
+    config = Config()
+    config.gnn_hidden_dim = 32
+    config.gnn_num_layers = 3
+    config.gnn_embedding_dim = 32
+    config.mlp_hidden_dims = [256, 128]
+    config.batch_size = 8
+    config.epochs = 100
+    config.patience = 10
+    return config
+
+
+def get_production_config() -> Config:
+    """
+    Production config for best performance.
+    Large model, many epochs.
+    """
+    config = Config()
+    config.gnn_hidden_dim = 128
+    config.gnn_num_layers = 8
+    config.gnn_embedding_dim = 128
+    config.mlp_hidden_dims = [2048, 1024, 512, 256]
+    config.batch_size = 32
+    config.epochs = 5000
+    config.patience = 100
+    config.learning_rate = 3e-4
+    return config
+
+
+# Display config
 if __name__ == "__main__":
-    # Display default configuration
+    print("="*70)
+    print("DEFAULT CONFIGURATION")
+    print("="*70)
+    
     config = Config()
     
-    print("="*70)
-    print("CONFIGURATION")
-    print("="*70)
+    print("\nPATHS:")
+    print(f"  csv_path: {config.csv_path}")
+    print(f"  checkpoint_dir: {config.checkpoint_dir}")
     
-    print("\nBCC STRUCTURE:")
-    print(f"  Supercell size: {config.supercell_size}x{config.supercell_size}x{config.supercell_size}")
-    print(f"  Lattice parameter: {config.lattice_parameter} Å")
-    print(f"  Elements: {config.elements}")
+    print("\nCRYSTAL STRUCTURE:")
+    print(f"  supercell_size: {config.supercell_size}")
+    print(f"  lattice_parameter: {config.lattice_parameter}")
     
-    print("\nNEB PARAMETERS:")
-    print(f"  Number of images: {config.neb_images}")
-    print(f"  Force convergence: {config.neb_fmax} eV/Å")
-    print(f"  Max steps: {config.neb_max_steps}")
-    print(f"  Spring constant: {config.neb_spring_constant}")
-    print(f"  Climbing image: {config.neb_climb}")
+    print("\nGRAPH CONSTRUCTION:")
+    print(f"  cutoff_radius: {config.cutoff_radius}")
+    print(f"  max_neighbors: {config.max_neighbors}")
     
-    print("\nRELAXATION:")
-    print(f"  Force convergence: {config.relax_fmax} eV/Å")
-    print(f"  Max steps: {config.relax_max_steps}")
-    print(f"  Relax cell: {config.relax_cell}")
+    print("\nDATA:")
+    print(f"  batch_size: {config.batch_size}")
+    print(f"  min_barrier: {config.min_barrier} eV")
+    print(f"  max_barrier: {config.max_barrier} eV")
+    print(f"  val_split: {config.val_split}")
+    print(f"  random_seed: {config.random_seed}")
     
-    print("\nGRAPH BUILDER:")
-    print(f"  Cutoff radius: {config.cutoff_radius} Å")
-    print(f"  Max neighbors: {config.max_neighbors}")
+    print("\nMODEL ARCHITECTURE:")
+    print(f"  gnn_hidden_dim: {config.gnn_hidden_dim}")
+    print(f"  gnn_num_layers: {config.gnn_num_layers}")
+    print(f"  gnn_embedding_dim: {config.gnn_embedding_dim}")
+    print(f"  mlp_hidden_dims: {config.mlp_hidden_dims}")
+    print(f"  dropout: {config.dropout}")
     
-    print("\nDATA STORAGE:")
-    print(f"  Database name: {config.database_name}")
-    print(f"  Database directory: {config.database_dir}")
-    print(f"  CSV name: {config.csv_name}")
-    print(f"  CSV path: {config.csv_path}")
+    print("\nTRAINING:")
+    print(f"  learning_rate: {config.learning_rate}")
+    print(f"  weight_decay: {config.weight_decay}")
+    print(f"  gradient_clip_norm: {config.gradient_clip_norm}")
+    print(f"  epochs: {config.epochs}")
+    print(f"  patience: {config.patience}")
+    print(f"  save_interval: {config.save_interval}")
+    
+    print("\nLEARNING RATE SCHEDULER:")
+    print(f"  use_scheduler: {config.use_scheduler}")
+    print(f"  scheduler_factor: {config.scheduler_factor}")
+    print(f"  scheduler_patience: {config.scheduler_patience}")
+    
+    print("\n" + "="*70)
+    
+    # Alternative configs
+    print("\nALTERNATIVE CONFIGURATIONS:")
+    
+    print("\n1. Fast Config (testing):")
+    fast = get_fast_config()
+    print(f"   Model: {fast.gnn_hidden_dim}D hidden, {fast.gnn_num_layers} layers")
+    print(f"   Training: {fast.epochs} epochs, batch {fast.batch_size}")
+    
+    print("\n2. Production Config (best performance):")
+    prod = get_production_config()
+    print(f"   Model: {prod.gnn_hidden_dim}D hidden, {prod.gnn_num_layers} layers")
+    print(f"   Training: {prod.epochs} epochs, batch {prod.batch_size}")
     
     print("\n" + "="*70)
