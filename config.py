@@ -38,7 +38,7 @@ class Config:
     
     # Data cleanup (barrier filtering)
     min_barrier: float = 0.1             # Minimum barrier (eV) - removes noise
-    max_barrier: float = 15.0             # Maximum barrier (eV) - removes slow diffusion
+    max_barrier: float = 15.0            # Maximum barrier (eV) - removes slow diffusion
     
     # Train/Val split
     val_split: float = 0.1               # Validation split ratio (10%)
@@ -71,8 +71,12 @@ class Config:
     
     # Learning rate scheduling
     use_scheduler: bool = True           # Use learning rate scheduler
-    scheduler_factor: float = 0.5        # Reduce LR by this factor
-    scheduler_patience: int = 10         # Patience for LR reduction
+    scheduler_type: str = "plateau"      # Scheduler type: "plateau", "cosine", "step", or "none"
+    scheduler_factor: float = 0.5        # Reduce LR by this factor (plateau, step)
+    scheduler_patience: int = 10         # Patience for LR reduction (plateau)
+    scheduler_step_size: int = 100       # Step size for StepLR (step)
+    scheduler_t_max: int = 500           # T_max for CosineAnnealingLR (cosine)
+    scheduler_eta_min: float = 1e-6      # Minimum LR for CosineAnnealingLR (cosine)
 
 
 # Alternative configurations
@@ -89,6 +93,8 @@ def get_fast_config() -> Config:
     config.batch_size = 8
     config.epochs = 100
     config.patience = 10
+    config.scheduler_patience = 5
+    config.scheduler_t_max = 100
     return config
 
 
@@ -106,6 +112,9 @@ def get_production_config() -> Config:
     config.epochs = 5000
     config.patience = 100
     config.learning_rate = 3e-4
+    config.scheduler_patience = 20
+    config.scheduler_t_max = 2000
+    config.scheduler_type = "cosine"  # Cosine annealing für lange Trainings
     return config
 
 
@@ -153,8 +162,12 @@ if __name__ == "__main__":
     
     print("\nLEARNING RATE SCHEDULER:")
     print(f"  use_scheduler: {config.use_scheduler}")
+    print(f"  scheduler_type: {config.scheduler_type}")
     print(f"  scheduler_factor: {config.scheduler_factor}")
     print(f"  scheduler_patience: {config.scheduler_patience}")
+    print(f"  scheduler_step_size: {config.scheduler_step_size}")
+    print(f"  scheduler_t_max: {config.scheduler_t_max}")
+    print(f"  scheduler_eta_min: {config.scheduler_eta_min}")
     
     print("\n" + "="*70)
     
@@ -165,10 +178,12 @@ if __name__ == "__main__":
     fast = get_fast_config()
     print(f"   Model: {fast.gnn_hidden_dim}D hidden, {fast.gnn_num_layers} layers")
     print(f"   Training: {fast.epochs} epochs, batch {fast.batch_size}")
+    print(f"   Scheduler: {fast.scheduler_type}")
     
     print("\n2. Production Config (best performance):")
     prod = get_production_config()
     print(f"   Model: {prod.gnn_hidden_dim}D hidden, {prod.gnn_num_layers} layers")
     print(f"   Training: {prod.epochs} epochs, batch {prod.batch_size}")
+    print(f"   Scheduler: {prod.scheduler_type}")
     
     print("\n" + "="*70)
