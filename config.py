@@ -29,7 +29,7 @@ class Config:
     # ============================================================
     # NEB PARAMETERS
     # ============================================================
-    neb_images: int = 5                  # Number of NEB images (including initial and final)
+    neb_images: int = 3                  # Number of NEB images (including initial and final)
     neb_fmax: float = 0.05               # Force convergence criterion (eV/Angstrom)
     neb_max_steps: int = 200             # Maximum NEB optimization steps
     neb_spring_constant: float = 0.5     # Spring constant for NEB
@@ -43,10 +43,16 @@ class Config:
     relax_cell: bool = False             # If True, relax cell; if False, only atoms
     
     # ============================================================
+    # GRAPH BUILDER
+    # ============================================================
+    cutoff_radius: float = 3.5           # Cutoff radius for edges (Angstrom)
+    max_neighbors: int = 50              # Maximum number of neighbors per atom
+    
+    # ============================================================
     # DATA STORAGE
     # ============================================================
-    database_name: str = "database"   # Database directory name
-    csv_name: str = "database_navi.csv"   # CSV filename for results
+    database_name: str = "database"      # Database directory name
+    csv_name: str = "database_navi.csv"  # CSV filename for results
     
     # ============================================================
     # RANDOM SEED
@@ -91,6 +97,10 @@ if __name__ == "__main__":
     print(f"  Force convergence: {config.relax_fmax} eV/Å")
     print(f"  Max steps: {config.relax_max_steps}")
     print(f"  Relax cell: {config.relax_cell}")
+    
+    print("\nGRAPH BUILDER:")
+    print(f"  Cutoff radius: {config.cutoff_radius} Å")
+    print(f"  Max neighbors: {config.max_neighbors}")
     
     print("\nDATA STORAGE:")
     print(f"  Database name: {config.database_name}")
