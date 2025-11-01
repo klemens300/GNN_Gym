@@ -1,0 +1,93 @@
+_wandb:
+    value:
+        cli_version: 0.22.1
+        e:
+            1r8c9aetdu7ct7e0rkue1520hb3ho83o:
+                cpu_count: 8
+                cpu_count_logical: 16
+                cudaVersion: "12.9"
+                disk:
+                    /:
+                        total: "1081101176832"
+                        used: "277966143488"
+                email: lechnerklemens@gmail.com
+                executable: /home/klemens/miniconda3/envs/wandb/bin/python
+                git:
+                    commit: fa729d09ac908d9a4a90aa984ca15b8158c57eea
+                    remote: https://github.com/klemens300/GNN_Gym.git
+                gpu: NVIDIA GeForce RTX 5090
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Blackwell
+                      memoryTotal: "34190917632"
+                      name: NVIDIA GeForce RTX 5090
+                      uuid: GPU-38b6f2e1-055f-0a7c-4969-9c8ca5cc040b
+                host: DESKTOP-3IQ9K7G
+                memory:
+                    total: "32361336832"
+                os: Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39
+                program: Untitled-1.ipynb
+                python: CPython 3.10.18
+                root: /home/klemens/aaa_New_code/251025_GNN_Gym
+                startedAt: "2025-11-01T23:24:20.751401Z"
+                writerId: 1r8c9aetdu7ct7e0rkue1520hb3ho83o
+        m: []
+        python_version: 3.10.18
+        t:
+            "1":
+                - 1
+                - 77
+                - 105
+            "2":
+                - 1
+                - 77
+                - 105
+            "3":
+                - 2
+                - 13
+                - 15
+                - 16
+            "4": 3.10.18
+            "5": 0.22.1
+            "8":
+                - 1
+            "12": 0.22.1
+            "13": linux-x86_64
+al_max_cycles:
+    value: 5
+al_n_query:
+    value: 20
+al_n_test:
+    value: 100
+al_query_strategy:
+    value: error_weighted
+al_test_strategy:
+    value: uniform
+batch_size:
+    value: 32
+dropout:
+    value: 0.15
+elements:
+    value:
+        - Mo
+        - Nb
+        - Ta
+        - W
+        - Cr
+epochs:
+    value: 1000
+gnn_embedding_dim:
+    value: 64
+gnn_hidden_dim:
+    value: 64
+gnn_num_layers:
+    value: 5
+learning_rate:
+    value: 0.0005
+mlp_hidden_dims:
+    value:
+        - 1024
+        - 512
+        - 256
+patience:
+    value: 50

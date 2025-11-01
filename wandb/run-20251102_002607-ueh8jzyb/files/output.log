@@ -1,0 +1,624 @@
+✓ Wandb initialized: AL-20251102-002607
+Oracle initialized
+  Database: database
+  CSV: database_navi.csv
+
+======================================================================
+CYCLE 0/10
+======================================================================
+✓ Database backed up: al_backups/database_cycle_0_20251102-002609.csv
+
+Database before cycle:
+  Samples: 0
+  Unique compositions: 0
+
+→ Training initial model...
+
+======================================================================
+TRAINING MODEL - CYCLE 0
+======================================================================
+
+======================================================================
+CREATING DATALOADERS
+======================================================================
+
+Loading data from: database_navi.csv
+Barrier filter: [0.1, 15.0] eV
+✗ Training failed: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+Traceback (most recent call last):
+  File "/tmp/ipykernel_445478/4150411725.py", line 254, in train_cycle_model
+    train_loader, val_loader = create_dataloaders(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/dataset.py", line 222, in create_dataloaders
+    full_dataset = DiffusionBarrierDataset(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/dataset.py", line 79, in __init__
+    self.graph_builder = TemplateGraphBuilder(config, csv_path=csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 68, in __init__
+    self.elements = self._detect_elements_from_database(csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 125, in _detect_elements_from_database
+    raise ValueError(
+ValueError: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+
+→ Running inference cycle 0...
+
+======================================================================
+INFERENCE CYCLE 0
+======================================================================
+Test samples (n_test): 100
+Query samples (n_query): 20
+Test strategy: uniform
+Query strategy: error_weighted
+
+✗ Inference cycle 0 failed: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+Traceback (most recent call last):
+  File "/tmp/ipykernel_445478/4150411725.py", line 407, in active_learning_loop
+    selected_compositions, predictions = run_inference_cycle(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/inference.py", line 654, in run_inference_cycle
+    builder = TemplateGraphBuilder(config)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 68, in __init__
+    self.elements = self._detect_elements_from_database(csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 125, in _detect_elements_from_database
+    raise ValueError(
+ValueError: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+
+======================================================================
+CYCLE 1/10
+======================================================================
+✓ Database backed up: al_backups/database_cycle_1_20251102-002609.csv
+
+Database before cycle:
+  Samples: 0
+  Unique compositions: 0
+⚠️  Model from previous cycle not found: checkpoints/cycle_0/best_model.pt
+   Training new model...
+
+======================================================================
+TRAINING MODEL - CYCLE 1
+======================================================================
+
+======================================================================
+CREATING DATALOADERS
+======================================================================
+
+Loading data from: database_navi.csv
+Barrier filter: [0.1, 15.0] eV
+✗ Training failed: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+Traceback (most recent call last):
+  File "/tmp/ipykernel_445478/4150411725.py", line 254, in train_cycle_model
+    train_loader, val_loader = create_dataloaders(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/dataset.py", line 222, in create_dataloaders
+    full_dataset = DiffusionBarrierDataset(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/dataset.py", line 79, in __init__
+    self.graph_builder = TemplateGraphBuilder(config, csv_path=csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 68, in __init__
+    self.elements = self._detect_elements_from_database(csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 125, in _detect_elements_from_database
+    raise ValueError(
+ValueError: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+
+→ Running inference cycle 1...
+
+======================================================================
+INFERENCE CYCLE 1
+======================================================================
+Test samples (n_test): 100
+Query samples (n_query): 20
+Test strategy: uniform
+Query strategy: error_weighted
+
+✗ Inference cycle 1 failed: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+Traceback (most recent call last):
+  File "/tmp/ipykernel_445478/4150411725.py", line 407, in active_learning_loop
+    selected_compositions, predictions = run_inference_cycle(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/inference.py", line 654, in run_inference_cycle
+    builder = TemplateGraphBuilder(config)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 68, in __init__
+    self.elements = self._detect_elements_from_database(csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 125, in _detect_elements_from_database
+    raise ValueError(
+ValueError: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+
+======================================================================
+CYCLE 2/10
+======================================================================
+✓ Database backed up: al_backups/database_cycle_2_20251102-002609.csv
+
+Database before cycle:
+  Samples: 0
+  Unique compositions: 0
+⚠️  Model from previous cycle not found: checkpoints/cycle_1/best_model.pt
+   Training new model...
+
+======================================================================
+TRAINING MODEL - CYCLE 2
+======================================================================
+
+======================================================================
+CREATING DATALOADERS
+======================================================================
+
+Loading data from: database_navi.csv
+Barrier filter: [0.1, 15.0] eV
+✗ Training failed: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+Traceback (most recent call last):
+  File "/tmp/ipykernel_445478/4150411725.py", line 254, in train_cycle_model
+    train_loader, val_loader = create_dataloaders(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/dataset.py", line 222, in create_dataloaders
+    full_dataset = DiffusionBarrierDataset(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/dataset.py", line 79, in __init__
+    self.graph_builder = TemplateGraphBuilder(config, csv_path=csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 68, in __init__
+    self.elements = self._detect_elements_from_database(csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 125, in _detect_elements_from_database
+    raise ValueError(
+ValueError: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+
+→ Running inference cycle 2...
+
+======================================================================
+INFERENCE CYCLE 2
+======================================================================
+Test samples (n_test): 100
+Query samples (n_query): 20
+Test strategy: uniform
+Query strategy: error_weighted
+
+✗ Inference cycle 2 failed: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+Traceback (most recent call last):
+  File "/tmp/ipykernel_445478/4150411725.py", line 407, in active_learning_loop
+    selected_compositions, predictions = run_inference_cycle(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/inference.py", line 654, in run_inference_cycle
+    builder = TemplateGraphBuilder(config)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 68, in __init__
+    self.elements = self._detect_elements_from_database(csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 125, in _detect_elements_from_database
+    raise ValueError(
+ValueError: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+
+======================================================================
+CYCLE 3/10
+======================================================================
+✓ Database backed up: al_backups/database_cycle_3_20251102-002609.csv
+
+Database before cycle:
+  Samples: 0
+  Unique compositions: 0
+⚠️  Model from previous cycle not found: checkpoints/cycle_2/best_model.pt
+   Training new model...
+
+======================================================================
+TRAINING MODEL - CYCLE 3
+======================================================================
+
+======================================================================
+CREATING DATALOADERS
+======================================================================
+
+Loading data from: database_navi.csv
+Barrier filter: [0.1, 15.0] eV
+✗ Training failed: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+Traceback (most recent call last):
+  File "/tmp/ipykernel_445478/4150411725.py", line 254, in train_cycle_model
+    train_loader, val_loader = create_dataloaders(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/dataset.py", line 222, in create_dataloaders
+    full_dataset = DiffusionBarrierDataset(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/dataset.py", line 79, in __init__
+    self.graph_builder = TemplateGraphBuilder(config, csv_path=csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 68, in __init__
+    self.elements = self._detect_elements_from_database(csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 125, in _detect_elements_from_database
+    raise ValueError(
+ValueError: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+
+→ Running inference cycle 3...
+
+======================================================================
+INFERENCE CYCLE 3
+======================================================================
+Test samples (n_test): 100
+Query samples (n_query): 20
+Test strategy: uniform
+Query strategy: error_weighted
+
+✗ Inference cycle 3 failed: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+Traceback (most recent call last):
+  File "/tmp/ipykernel_445478/4150411725.py", line 407, in active_learning_loop
+    selected_compositions, predictions = run_inference_cycle(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/inference.py", line 654, in run_inference_cycle
+    builder = TemplateGraphBuilder(config)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 68, in __init__
+    self.elements = self._detect_elements_from_database(csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 125, in _detect_elements_from_database
+    raise ValueError(
+ValueError: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+
+======================================================================
+CYCLE 4/10
+======================================================================
+✓ Database backed up: al_backups/database_cycle_4_20251102-002610.csv
+
+Database before cycle:
+  Samples: 0
+  Unique compositions: 0
+⚠️  Model from previous cycle not found: checkpoints/cycle_3/best_model.pt
+   Training new model...
+
+======================================================================
+TRAINING MODEL - CYCLE 4
+======================================================================
+
+======================================================================
+CREATING DATALOADERS
+======================================================================
+
+Loading data from: database_navi.csv
+Barrier filter: [0.1, 15.0] eV
+✗ Training failed: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+Traceback (most recent call last):
+  File "/tmp/ipykernel_445478/4150411725.py", line 254, in train_cycle_model
+    train_loader, val_loader = create_dataloaders(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/dataset.py", line 222, in create_dataloaders
+    full_dataset = DiffusionBarrierDataset(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/dataset.py", line 79, in __init__
+    self.graph_builder = TemplateGraphBuilder(config, csv_path=csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 68, in __init__
+    self.elements = self._detect_elements_from_database(csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 125, in _detect_elements_from_database
+    raise ValueError(
+ValueError: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+
+→ Running inference cycle 4...
+
+======================================================================
+INFERENCE CYCLE 4
+======================================================================
+Test samples (n_test): 100
+Query samples (n_query): 20
+Test strategy: uniform
+Query strategy: error_weighted
+
+✗ Inference cycle 4 failed: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+Traceback (most recent call last):
+  File "/tmp/ipykernel_445478/4150411725.py", line 407, in active_learning_loop
+    selected_compositions, predictions = run_inference_cycle(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/inference.py", line 654, in run_inference_cycle
+    builder = TemplateGraphBuilder(config)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 68, in __init__
+    self.elements = self._detect_elements_from_database(csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 125, in _detect_elements_from_database
+    raise ValueError(
+ValueError: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+
+======================================================================
+CYCLE 5/10
+======================================================================
+✓ Database backed up: al_backups/database_cycle_5_20251102-002610.csv
+
+Database before cycle:
+  Samples: 0
+  Unique compositions: 0
+⚠️  Model from previous cycle not found: checkpoints/cycle_4/best_model.pt
+   Training new model...
+
+======================================================================
+TRAINING MODEL - CYCLE 5
+======================================================================
+
+======================================================================
+CREATING DATALOADERS
+======================================================================
+
+Loading data from: database_navi.csv
+Barrier filter: [0.1, 15.0] eV
+✗ Training failed: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+Traceback (most recent call last):
+  File "/tmp/ipykernel_445478/4150411725.py", line 254, in train_cycle_model
+    train_loader, val_loader = create_dataloaders(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/dataset.py", line 222, in create_dataloaders
+    full_dataset = DiffusionBarrierDataset(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/dataset.py", line 79, in __init__
+    self.graph_builder = TemplateGraphBuilder(config, csv_path=csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 68, in __init__
+    self.elements = self._detect_elements_from_database(csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 125, in _detect_elements_from_database
+    raise ValueError(
+ValueError: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+
+→ Running inference cycle 5...
+
+======================================================================
+INFERENCE CYCLE 5
+======================================================================
+Test samples (n_test): 100
+Query samples (n_query): 20
+Test strategy: uniform
+Query strategy: error_weighted
+
+✗ Inference cycle 5 failed: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+Traceback (most recent call last):
+  File "/tmp/ipykernel_445478/4150411725.py", line 407, in active_learning_loop
+    selected_compositions, predictions = run_inference_cycle(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/inference.py", line 654, in run_inference_cycle
+    builder = TemplateGraphBuilder(config)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 68, in __init__
+    self.elements = self._detect_elements_from_database(csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 125, in _detect_elements_from_database
+    raise ValueError(
+ValueError: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+
+======================================================================
+CYCLE 6/10
+======================================================================
+✓ Database backed up: al_backups/database_cycle_6_20251102-002610.csv
+
+Database before cycle:
+  Samples: 0
+  Unique compositions: 0
+⚠️  Model from previous cycle not found: checkpoints/cycle_5/best_model.pt
+   Training new model...
+
+======================================================================
+TRAINING MODEL - CYCLE 6
+======================================================================
+
+======================================================================
+CREATING DATALOADERS
+======================================================================
+
+Loading data from: database_navi.csv
+Barrier filter: [0.1, 15.0] eV
+✗ Training failed: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+Traceback (most recent call last):
+  File "/tmp/ipykernel_445478/4150411725.py", line 254, in train_cycle_model
+    train_loader, val_loader = create_dataloaders(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/dataset.py", line 222, in create_dataloaders
+    full_dataset = DiffusionBarrierDataset(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/dataset.py", line 79, in __init__
+    self.graph_builder = TemplateGraphBuilder(config, csv_path=csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 68, in __init__
+    self.elements = self._detect_elements_from_database(csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 125, in _detect_elements_from_database
+    raise ValueError(
+ValueError: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+
+→ Running inference cycle 6...
+
+======================================================================
+INFERENCE CYCLE 6
+======================================================================
+Test samples (n_test): 100
+Query samples (n_query): 20
+Test strategy: uniform
+Query strategy: error_weighted
+
+✗ Inference cycle 6 failed: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+Traceback (most recent call last):
+  File "/tmp/ipykernel_445478/4150411725.py", line 407, in active_learning_loop
+    selected_compositions, predictions = run_inference_cycle(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/inference.py", line 654, in run_inference_cycle
+    builder = TemplateGraphBuilder(config)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 68, in __init__
+    self.elements = self._detect_elements_from_database(csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 125, in _detect_elements_from_database
+    raise ValueError(
+ValueError: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+
+======================================================================
+CYCLE 7/10
+======================================================================
+✓ Database backed up: al_backups/database_cycle_7_20251102-002610.csv
+
+Database before cycle:
+  Samples: 0
+  Unique compositions: 0
+⚠️  Model from previous cycle not found: checkpoints/cycle_6/best_model.pt
+   Training new model...
+
+======================================================================
+TRAINING MODEL - CYCLE 7
+======================================================================
+
+======================================================================
+CREATING DATALOADERS
+======================================================================
+
+Loading data from: database_navi.csv
+Barrier filter: [0.1, 15.0] eV
+✗ Training failed: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+Traceback (most recent call last):
+  File "/tmp/ipykernel_445478/4150411725.py", line 254, in train_cycle_model
+    train_loader, val_loader = create_dataloaders(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/dataset.py", line 222, in create_dataloaders
+    full_dataset = DiffusionBarrierDataset(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/dataset.py", line 79, in __init__
+    self.graph_builder = TemplateGraphBuilder(config, csv_path=csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 68, in __init__
+    self.elements = self._detect_elements_from_database(csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 125, in _detect_elements_from_database
+    raise ValueError(
+ValueError: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+
+→ Running inference cycle 7...
+
+======================================================================
+INFERENCE CYCLE 7
+======================================================================
+Test samples (n_test): 100
+Query samples (n_query): 20
+Test strategy: uniform
+Query strategy: error_weighted
+
+✗ Inference cycle 7 failed: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+Traceback (most recent call last):
+  File "/tmp/ipykernel_445478/4150411725.py", line 407, in active_learning_loop
+    selected_compositions, predictions = run_inference_cycle(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/inference.py", line 654, in run_inference_cycle
+    builder = TemplateGraphBuilder(config)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 68, in __init__
+    self.elements = self._detect_elements_from_database(csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 125, in _detect_elements_from_database
+    raise ValueError(
+ValueError: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+
+======================================================================
+CYCLE 8/10
+======================================================================
+✓ Database backed up: al_backups/database_cycle_8_20251102-002610.csv
+
+Database before cycle:
+  Samples: 0
+  Unique compositions: 0
+⚠️  Model from previous cycle not found: checkpoints/cycle_7/best_model.pt
+   Training new model...
+
+======================================================================
+TRAINING MODEL - CYCLE 8
+======================================================================
+
+======================================================================
+CREATING DATALOADERS
+======================================================================
+
+Loading data from: database_navi.csv
+Barrier filter: [0.1, 15.0] eV
+✗ Training failed: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+Traceback (most recent call last):
+  File "/tmp/ipykernel_445478/4150411725.py", line 254, in train_cycle_model
+    train_loader, val_loader = create_dataloaders(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/dataset.py", line 222, in create_dataloaders
+    full_dataset = DiffusionBarrierDataset(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/dataset.py", line 79, in __init__
+    self.graph_builder = TemplateGraphBuilder(config, csv_path=csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 68, in __init__
+    self.elements = self._detect_elements_from_database(csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 125, in _detect_elements_from_database
+    raise ValueError(
+ValueError: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+
+→ Running inference cycle 8...
+
+======================================================================
+INFERENCE CYCLE 8
+======================================================================
+Test samples (n_test): 100
+Query samples (n_query): 20
+Test strategy: uniform
+Query strategy: error_weighted
+
+✗ Inference cycle 8 failed: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+Traceback (most recent call last):
+  File "/tmp/ipykernel_445478/4150411725.py", line 407, in active_learning_loop
+    selected_compositions, predictions = run_inference_cycle(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/inference.py", line 654, in run_inference_cycle
+    builder = TemplateGraphBuilder(config)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 68, in __init__
+    self.elements = self._detect_elements_from_database(csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 125, in _detect_elements_from_database
+    raise ValueError(
+ValueError: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+
+======================================================================
+CYCLE 9/10
+======================================================================
+✓ Database backed up: al_backups/database_cycle_9_20251102-002610.csv
+
+Database before cycle:
+  Samples: 0
+  Unique compositions: 0
+⚠️  Model from previous cycle not found: checkpoints/cycle_8/best_model.pt
+   Training new model...
+
+======================================================================
+TRAINING MODEL - CYCLE 9
+======================================================================
+
+======================================================================
+CREATING DATALOADERS
+======================================================================
+
+Loading data from: database_navi.csv
+Barrier filter: [0.1, 15.0] eV
+✗ Training failed: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+Traceback (most recent call last):
+  File "/tmp/ipykernel_445478/4150411725.py", line 254, in train_cycle_model
+    train_loader, val_loader = create_dataloaders(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/dataset.py", line 222, in create_dataloaders
+    full_dataset = DiffusionBarrierDataset(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/dataset.py", line 79, in __init__
+    self.graph_builder = TemplateGraphBuilder(config, csv_path=csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 68, in __init__
+    self.elements = self._detect_elements_from_database(csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 125, in _detect_elements_from_database
+    raise ValueError(
+ValueError: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+
+→ Running inference cycle 9...
+
+======================================================================
+INFERENCE CYCLE 9
+======================================================================
+Test samples (n_test): 100
+Query samples (n_query): 20
+Test strategy: uniform
+Query strategy: error_weighted
+
+✗ Inference cycle 9 failed: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+Traceback (most recent call last):
+  File "/tmp/ipykernel_445478/4150411725.py", line 407, in active_learning_loop
+    selected_compositions, predictions = run_inference_cycle(
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/inference.py", line 654, in run_inference_cycle
+    builder = TemplateGraphBuilder(config)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 68, in __init__
+    self.elements = self._detect_elements_from_database(csv_path)
+  File "/home/klemens/aaa_New_code/251025_GNN_Gym/template_graph_builder.py", line 125, in _detect_elements_from_database
+    raise ValueError(
+ValueError: CSV is empty: database_navi.csv
+Generate data first with: python bulk_calculation.py
+
+======================================================================
+ACTIVE LEARNING COMPLETED
+======================================================================
+
+Total cycles: 10
+Final database size: 0 samples
+Final unique compositions: 0
+
+✓ Cycle summary saved: active_learning_results/cycle_summary.csv

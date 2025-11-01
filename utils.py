@@ -14,20 +14,24 @@ Functions:
 import torch
 from pathlib import Path
 from datetime import datetime
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from torch_geometric.data import Batch
 
 from model import create_model_from_config, count_parameters
 
 
+# ============================================================================
+# NODE FEATURE DIMENSION
+# ============================================================================
+
 def get_node_input_dim(builder) -> int:
     """
-    Calculate node input dimension from TemplateGraphBuilder.
+    Calculate node input dimension from builder.
     
     Node features:
-    - Positions: 3
-    - Element one-hot: len(elements)
-    - Atomic properties: 4
+    - 3D coordinates (3)
+    - One-hot element encoding (n_elements)
+    - 4 additional features (degree, coordination, etc.)
     
     Args:
         builder: TemplateGraphBuilder instance
@@ -37,101 +41,113 @@ def get_node_input_dim(builder) -> int:
     
     Example:
         >>> builder = TemplateGraphBuilder(config)
-        >>> node_input_dim = get_node_input_dim(builder)
-        >>> print(node_input_dim)  # 12 (for 5 elements)
+        >>> dim = get_node_input_dim(builder)
+        >>> print(f"Node input dim: {dim}")
     """
     return 3 + len(builder.elements) + 4
 
 
+# ============================================================================
+# SAVE MODEL
+# ============================================================================
+
 def save_model_for_inference(
     model,
-    node_input_dim: int,
-    elements: List[str],
-    config,
     filepath: str,
-    metadata: dict = None
+    config,
+    builder,
+    epoch: int = None,
+    metrics: dict = None,
+    optimizer_state: dict = None
 ):
     """
-    Save model with all metadata needed for inference.
+    Save model with full metadata for inference and resuming.
     
     Saves:
     - Model weights
-    - node_input_dim (critical for reconstruction)
-    - Elements (for validation)
-    - Config (for model architecture)
-    - Optional metadata (training info, etc.)
+    - Config parameters
+    - Element information
+    - Training metadata
+    - Optional: optimizer state
     
     Args:
-        model: Trained model
-        node_input_dim: Node feature dimension
-        elements: List of elements (from builder)
+        model: Model to save
+        filepath: Save path
         config: Config object
-        filepath: Path to save checkpoint
-        metadata: Optional additional metadata
+        builder: TemplateGraphBuilder (for element info)
+        epoch: Current epoch (optional)
+        metrics: Training metrics (optional)
+        optimizer_state: Optimizer state dict (optional)
     
     Example:
         >>> save_model_for_inference(
-        ...     model, 12, ['Mo', 'Nb', 'O', 'Ta', 'W'],
-        ...     config, 'best_model.pt',
-        ...     metadata={'val_mae': 0.023, 'epoch': 150}
+        ...     model, 'checkpoints/best_model.pt',
+        ...     config, builder, epoch=100,
+        ...     metrics={'val_loss': 0.123}
         ... )
     """
     filepath = Path(filepath)
     filepath.parent.mkdir(parents=True, exist_ok=True)
     
+    # Build checkpoint
     checkpoint = {
-        # Model
         'model_state_dict': model.state_dict(),
-        'model_config': model.model_config,
-        'node_input_dim': node_input_dim,
-        'elements': elements,
-        
-        # Config
+        'elements': builder.elements,
+        'node_input_dim': get_node_input_dim(builder),
         'config': {
             'gnn_hidden_dim': config.gnn_hidden_dim,
             'gnn_num_layers': config.gnn_num_layers,
             'gnn_embedding_dim': config.gnn_embedding_dim,
             'mlp_hidden_dims': config.mlp_hidden_dims,
-            'dropout': config.dropout
+            'dropout': config.dropout,
         },
-        
-        # Metadata
-        'timestamp': datetime.now().isoformat(),
-        'pytorch_version': torch.__version__
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     }
     
-    # Add optional metadata
-    if metadata is not None:
-        checkpoint['metadata'] = metadata
+    # Add optional data
+    if epoch is not None:
+        checkpoint['epoch'] = epoch
     
+    if metrics is not None:
+        checkpoint['metrics'] = metrics
+    
+    if optimizer_state is not None:
+        checkpoint['optimizer_state_dict'] = optimizer_state
+    
+    # Save
     torch.save(checkpoint, filepath)
     
     print(f"✓ Model saved: {filepath}")
-    print(f"  Elements: {elements}")
-    print(f"  Node input dim: {node_input_dim}")
 
 
-def load_model_for_inference(filepath: str, config, validate: bool = True):
+# ============================================================================
+# LOAD MODEL
+# ============================================================================
+
+def load_model_for_inference(filepath: str, config, validate: bool = False):
     """
-    Load model for inference with validation.
+    Load model for inference using Config parameters.
     
     Args:
         filepath: Path to checkpoint
-        config: Config object (with current database)
-        validate: Whether to validate elements (default: True)
+        config: Config object (provides elements and architecture)
+        validate: Whether to validate (default: False, not recommended)
     
     Returns:
         model: Loaded model in eval mode
         checkpoint: Full checkpoint dict (for metadata access)
     
     Raises:
-        ValueError: If elements don't match (and validate=True)
         FileNotFoundError: If checkpoint doesn't exist
     
+    Note:
+        Model architecture is determined by Config, not checkpoint.
+        This allows using checkpoints with different configs.
+    
     Example:
-        >>> model, checkpoint = load_model_for_inference('best_model.pt', config)
-        >>> print(f"Model trained on: {checkpoint['elements']}")
-        >>> print(f"Val MAE: {checkpoint['metadata']['val_mae']}")
+        >>> model, checkpoint = load_model_for_inference(
+        ...     'checkpoints/best_model.pt', config
+        ... )
     """
     filepath = Path(filepath)
     
@@ -142,64 +158,74 @@ def load_model_for_inference(filepath: str, config, validate: bool = True):
     checkpoint = torch.load(filepath, map_location='cpu')
     
     print(f"Loading model from: {filepath}")
-    print(f"  Saved: {checkpoint['timestamp']}")
-    print(f"  Elements: {checkpoint['elements']}")
-    print(f"  Node input dim: {checkpoint['node_input_dim']}")
     
-    # Validate elements if requested
-    if validate:
-        from template_graph_builder import TemplateGraphBuilder
-        builder = TemplateGraphBuilder(config)
-        
-        if builder.elements != checkpoint['elements']:
-            raise ValueError(
-                f"Element mismatch!\n"
-                f"  Model trained on: {checkpoint['elements']}\n"
-                f"  Current database: {builder.elements}\n"
-                f"Cannot use this model with different elements!\n"
-                f"Set validate=False to load anyway (not recommended)."
-            )
+    # Get elements and node_input_dim from Config (not checkpoint)
+    from template_graph_builder import TemplateGraphBuilder
+    builder = TemplateGraphBuilder(config)
+    node_input_dim = 3 + len(builder.elements) + 4
     
-    # Create model with correct architecture
-    model = create_model_from_config(config, checkpoint['node_input_dim'])
+    print(f"  Using Config:")
+    print(f"    Elements: {builder.elements}")
+    print(f"    Node input dim: {node_input_dim}")
+    
+    # Optional: Show checkpoint metadata if available
+    if 'timestamp' in checkpoint:
+        print(f"  Checkpoint saved: {checkpoint['timestamp']}")
+    if 'epoch' in checkpoint:
+        print(f"  Epoch: {checkpoint['epoch']}")
+    if 'metrics' in checkpoint:
+        print(f"  Metrics: {checkpoint['metrics']}")
+    
+    # Create model with Config architecture
+    model = create_model_from_config(config, node_input_dim)
     
     # Load weights
-    model.load_state_dict(checkpoint['model_state_dict'])
+    try:
+        model.load_state_dict(checkpoint['model_state_dict'])
+        print(f"✓ Model loaded successfully")
+    except Exception as e:
+        print(f"⚠️  Warning: Could not load all weights: {e}")
+        print(f"   This may happen if model architecture changed")
+        # Try partial loading
+        model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+        print(f"✓ Model loaded (partial)")
     
     # Set to eval mode
     model.eval()
     
-    print(f"✓ Model loaded successfully")
-    
     return model, checkpoint
 
 
-def validate_elements(model_elements: List[str], current_elements: List[str]) -> bool:
+# ============================================================================
+# VALIDATION
+# ============================================================================
+
+def validate_elements(checkpoint_elements: List[str], current_elements: List[str]) -> bool:
     """
-    Validate that elements match.
+    Check if elements match between checkpoint and current database.
     
     Args:
-        model_elements: Elements model was trained on
-        current_elements: Elements in current database
+        checkpoint_elements: Elements from checkpoint
+        current_elements: Elements from current database
     
     Returns:
         match: True if elements match
     
     Example:
-        >>> match = validate_elements(
-        ...     ['Mo', 'Nb', 'Ta', 'W'],
-        ...     ['Mo', 'Nb', 'Ta', 'W']
-        ... )
-        >>> print(match)  # True
+        >>> match = validate_elements(['Mo', 'W'], ['Mo', 'W'])
+        >>> print(f"Elements match: {match}")
     """
-    return model_elements == current_elements
+    return checkpoint_elements == current_elements
 
+
+# ============================================================================
+# PREDICTION FUNCTIONS
+# ============================================================================
 
 def predict_single(
     model,
-    initial_cif: str,
-    final_cif: str,
-    builder,
+    initial_graph,
+    final_graph,
     device: str = 'cpu'
 ) -> float:
     """
@@ -207,31 +233,21 @@ def predict_single(
     
     Args:
         model: Trained model
-        initial_cif: Path to initial structure CIF
-        final_cif: Path to final structure CIF
-        builder: TemplateGraphBuilder instance
-        device: Device to run on ('cpu' or 'cuda')
+        initial_graph: Initial structure graph
+        final_graph: Final structure graph
+        device: Device to use ('cpu' or 'cuda')
     
     Returns:
         barrier: Predicted barrier (eV)
     
     Example:
-        >>> barrier = predict_single(
-        ...     model, 'initial.cif', 'final.cif', builder
-        ... )
-        >>> print(f"Predicted: {barrier:.4f} eV")
+        >>> barrier = predict_single(model, initial_graph, final_graph)
+        >>> print(f"Predicted barrier: {barrier:.3f} eV")
     """
     model.eval()
-    model = model.to(device)
+    device = torch.device(device)
     
-    # Build graphs (with dummy barrier)
-    initial_graph, final_graph = builder.build_pair_graph(
-        initial_cif,
-        final_cif,
-        backward_barrier=0.0  # Dummy value
-    )
-    
-    # Convert to batch
+    # Batch single graphs
     initial_batch = Batch.from_data_list([initial_graph]).to(device)
     final_batch = Batch.from_data_list([final_graph]).to(device)
     
@@ -244,105 +260,102 @@ def predict_single(
 
 def predict_batch(
     model,
-    cif_pairs: List[Tuple[str, str]],
-    builder,
-    batch_size: int = 32,
-    device: str = 'cpu'
+    initial_graphs: List,
+    final_graphs: List,
+    device: str = 'cpu',
+    batch_size: int = 32
 ) -> List[float]:
     """
     Predict barriers for multiple structure pairs.
     
     Args:
         model: Trained model
-        cif_pairs: List of (initial_cif, final_cif) tuples
-        builder: TemplateGraphBuilder instance
+        initial_graphs: List of initial structure graphs
+        final_graphs: List of final structure graphs
+        device: Device to use ('cpu' or 'cuda')
         batch_size: Batch size for prediction
-        device: Device to run on
     
     Returns:
         barriers: List of predicted barriers (eV)
     
     Example:
-        >>> cif_pairs = [
-        ...     ('init1.cif', 'final1.cif'),
-        ...     ('init2.cif', 'final2.cif')
-        ... ]
-        >>> barriers = predict_batch(model, cif_pairs, builder)
-        >>> print(barriers)  # [0.589, 0.723]
+        >>> barriers = predict_batch(
+        ...     model, initial_graphs, final_graphs, batch_size=64
+        ... )
+        >>> print(f"Predicted {len(barriers)} barriers")
     """
     model.eval()
+    device = torch.device(device)
     model = model.to(device)
     
-    all_predictions = []
+    predictions = []
     
     # Process in batches
-    for i in range(0, len(cif_pairs), batch_size):
-        batch_pairs = cif_pairs[i:i+batch_size]
-        
-        # Build graphs for batch
-        initial_graphs = []
-        final_graphs = []
-        
-        for initial_cif, final_cif in batch_pairs:
-            initial, final = builder.build_pair_graph(
-                initial_cif, final_cif, backward_barrier=0.0
-            )
-            initial_graphs.append(initial)
-            final_graphs.append(final)
+    for i in range(0, len(initial_graphs), batch_size):
+        batch_initial = initial_graphs[i:i+batch_size]
+        batch_final = final_graphs[i:i+batch_size]
         
         # Create batches
-        initial_batch = Batch.from_data_list(initial_graphs).to(device)
-        final_batch = Batch.from_data_list(final_graphs).to(device)
+        initial_batch = Batch.from_data_list(batch_initial).to(device)
+        final_batch = Batch.from_data_list(batch_final).to(device)
         
         # Predict
         with torch.no_grad():
-            predictions = model(initial_batch, final_batch)
+            batch_predictions = model(initial_batch, final_batch)
         
-        # Collect predictions
-        all_predictions.extend(predictions.squeeze().cpu().tolist())
+        predictions.extend(batch_predictions.cpu().numpy().tolist())
     
-    return all_predictions
+    return predictions
 
+
+# ============================================================================
+# MODEL INFO
+# ============================================================================
 
 def print_model_info(model, checkpoint: dict = None):
     """
     Print detailed model information.
     
     Args:
-        model: Model instance
-        checkpoint: Optional checkpoint dict with metadata
+        model: Model to inspect
+        checkpoint: Optional checkpoint dict
     
     Example:
-        >>> model, checkpoint = load_model_for_inference('best.pt', config)
+        >>> model, checkpoint = load_model_for_inference(path, config)
         >>> print_model_info(model, checkpoint)
     """
     print("\n" + "="*70)
     print("MODEL INFORMATION")
     print("="*70)
     
-    # Architecture
+    # Model architecture
     print("\nArchitecture:")
-    for key, value in model.model_config.items():
-        print(f"  {key}: {value}")
-    
-    # Parameters
-    params = count_parameters(model)
-    print(f"\nParameters:")
-    print(f"  Encoder: {params['encoder']:,}")
-    print(f"  Predictor: {params['predictor']:,}")
-    print(f"  Total: {params['total']:,}")
+    print(f"  Total parameters: {count_parameters(model):,}")
     
     # Checkpoint info
     if checkpoint is not None:
-        print(f"\nCheckpoint:")
-        print(f"  Timestamp: {checkpoint.get('timestamp', 'N/A')}")
-        print(f"  Elements: {checkpoint.get('elements', 'N/A')}")
-        print(f"  Node input dim: {checkpoint.get('node_input_dim', 'N/A')}")
-        
-        if 'metadata' in checkpoint:
-            print(f"\nTraining metadata:")
-            for key, value in checkpoint['metadata'].items():
-                print(f"  {key}: {value}")
+        print("\nCheckpoint:")
+        if 'timestamp' in checkpoint:
+            print(f"  Saved: {checkpoint['timestamp']}")
+        if 'epoch' in checkpoint:
+            print(f"  Epoch: {checkpoint['epoch']}")
+        if 'elements' in checkpoint:
+            print(f"  Elements: {checkpoint['elements']}")
+        if 'node_input_dim' in checkpoint:
+            print(f"  Node input dim: {checkpoint['node_input_dim']}")
+        if 'metrics' in checkpoint:
+            print(f"  Metrics:")
+            for key, value in checkpoint['metrics'].items():
+                if isinstance(value, float):
+                    print(f"    {key}: {value:.4f}")
+                else:
+                    print(f"    {key}: {value}")
+    
+    # Config info
+    if checkpoint is not None and 'config' in checkpoint:
+        print("\nConfiguration:")
+        for key, value in checkpoint['config'].items():
+            print(f"  {key}: {value}")
     
     print("="*70 + "\n")
 
@@ -354,39 +367,25 @@ def print_model_info(model, checkpoint: dict = None):
 if __name__ == "__main__":
     from config import Config
     from template_graph_builder import TemplateGraphBuilder
-    from model import create_model_from_config
     
-    print("\n" + "="*70)
-    print("UTILS TEST")
+    print("="*70)
+    print("UTILS MODULE")
     print("="*70)
     
-    # Setup
     config = Config()
     builder = TemplateGraphBuilder(config)
     
-    # Get node input dim
-    node_input_dim = get_node_input_dim(builder)
-    print(f"\n✓ Node input dim: {node_input_dim}")
+    print("\nNode Input Dimension:")
+    dim = get_node_input_dim(builder)
+    print(f"  {dim} (3 coords + {len(builder.elements)} elements + 4 features)")
     
-    # Create model
-    model = create_model_from_config(config, node_input_dim)
-    print(f"✓ Model created")
+    print("\nAvailable Functions:")
+    print("  - get_node_input_dim(builder)")
+    print("  - save_model_for_inference(model, path, config, builder, ...)")
+    print("  - load_model_for_inference(path, config, validate=False)")
+    print("  - predict_single(model, initial_graph, final_graph)")
+    print("  - predict_batch(model, initial_graphs, final_graphs)")
+    print("  - validate_elements(checkpoint_elements, current_elements)")
+    print("  - print_model_info(model, checkpoint)")
     
-    # Save model
-    save_model_for_inference(
-        model,
-        node_input_dim,
-        builder.elements,
-        config,
-        'test_model.pt',
-        metadata={'test': True}
-    )
-    
-    # Load model
-    loaded_model, checkpoint = load_model_for_inference('test_model.pt', config)
-    print(f"✓ Model loaded")
-    
-    # Print info
-    print_model_info(loaded_model, checkpoint)
-    
-    print("="*70 + "\n")
+    print("\n" + "="*70)

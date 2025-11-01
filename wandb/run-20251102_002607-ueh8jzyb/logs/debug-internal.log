@@ -1,0 +1,14 @@
+{"time":"2025-11-02T00:26:08.69957989+01:00","level":"INFO","msg":"stream: starting","core version":"0.22.1"}
+{"time":"2025-11-02T00:26:09.04370416+01:00","level":"INFO","msg":"stream: created new stream","id":"ueh8jzyb"}
+{"time":"2025-11-02T00:26:09.043819996+01:00","level":"INFO","msg":"handler: started","stream_id":"ueh8jzyb"}
+{"time":"2025-11-02T00:26:09.043837813+01:00","level":"INFO","msg":"stream: started","id":"ueh8jzyb"}
+{"time":"2025-11-02T00:26:09.043850177+01:00","level":"INFO","msg":"sender: started","stream_id":"ueh8jzyb"}
+{"time":"2025-11-02T00:26:09.043865599+01:00","level":"INFO","msg":"writer: started","stream_id":"ueh8jzyb"}
+{"time":"2025-11-02T00:26:09.602687039+01:00","level":"INFO","msg":"flowcontrol: backed up, offloading to disk","recordNumber":37}
+{"time":"2025-11-02T00:26:09.789554277+01:00","level":"INFO","msg":"flowcontrol: unblocked","totalOffloaded":136}
+{"time":"2025-11-02T00:26:12.162714262+01:00","level":"INFO","msg":"handler: operation stats","stats":{"operations":[{"desc":"updating run metadata","runtime_seconds":2.637261479},{"desc":"uploading artifact run-ueh8jzyb-summarycycle_metrics-biALXw","runtime_seconds":0.871107004,"subtasks":[{"desc":"summary/cycle_metrics.table.json","runtime_seconds":0.006976436,"progress":"164B/164B"}]},{"desc":"uploading media/table/summary/cycle_metrics_3_51529c71b63a1e384852.table.json","runtime_seconds":0.194609869,"progress":"27B/27B"}],"total_operations":3}}
+{"time":"2025-11-02T00:26:13.610416965+01:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-11-02T00:26:14.051833366+01:00","level":"INFO","msg":"stream: closing","id":"ueh8jzyb"}
+{"time":"2025-11-02T00:26:14.05189731+01:00","level":"INFO","msg":"handler: closed","stream_id":"ueh8jzyb"}
+{"time":"2025-11-02T00:26:14.051985631+01:00","level":"INFO","msg":"sender: closed","stream_id":"ueh8jzyb"}
+{"time":"2025-11-02T00:26:14.05200992+01:00","level":"INFO","msg":"stream: closed","id":"ueh8jzyb"}

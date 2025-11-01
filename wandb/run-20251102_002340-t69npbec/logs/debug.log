@@ -1,0 +1,35 @@
+2025-11-02 00:23:40,031 INFO    MainThread:445478 [wandb_setup.py:_flush():81] Current SDK version is 0.22.1
+2025-11-02 00:23:40,031 INFO    MainThread:445478 [wandb_setup.py:_flush():81] Configure stats pid to 445478
+2025-11-02 00:23:40,031 INFO    MainThread:445478 [wandb_setup.py:_flush():81] Loading settings from /home/klemens/.config/wandb/settings
+2025-11-02 00:23:40,031 INFO    MainThread:445478 [wandb_setup.py:_flush():81] Loading settings from /home/klemens/aaa_New_code/251025_GNN_Gym/wandb/settings
+2025-11-02 00:23:40,031 INFO    MainThread:445478 [wandb_setup.py:_flush():81] Loading settings from environment variables
+2025-11-02 00:23:40,031 INFO    MainThread:445478 [wandb_init.py:setup_run_log_directory():705] Logging user logs to /home/klemens/aaa_New_code/251025_GNN_Gym/wandb/run-20251102_002340-t69npbec/logs/debug.log
+2025-11-02 00:23:40,031 INFO    MainThread:445478 [wandb_init.py:setup_run_log_directory():706] Logging internal logs to /home/klemens/aaa_New_code/251025_GNN_Gym/wandb/run-20251102_002340-t69npbec/logs/debug-internal.log
+2025-11-02 00:23:40,031 INFO    MainThread:445478 [wandb_init.py:monkeypatch_ipython():624] configuring jupyter hooks <wandb.sdk.wandb_init._WandbInit object at 0x7f486ef73cd0>
+2025-11-02 00:23:40,031 INFO    MainThread:445478 [wandb_init.py:init():832] calling init triggers
+2025-11-02 00:23:40,031 INFO    MainThread:445478 [wandb_init.py:init():837] wandb.init called with sweep_config: {}
+config: {'al_max_cycles': 5, 'al_n_test': 100, 'al_n_query': 20, 'al_test_strategy': 'uniform', 'al_query_strategy': 'error_weighted', 'gnn_hidden_dim': 64, 'gnn_num_layers': 5, 'gnn_embedding_dim': 64, 'mlp_hidden_dims': [1024, 512, 256], 'dropout': 0.15, 'learning_rate': 0.0005, 'batch_size': 32, 'epochs': 1000, 'patience': 50, 'elements': ['Mo', 'Nb', 'Ta', 'W', 'Cr'], '_wandb': {}}
+2025-11-02 00:23:40,031 INFO    MainThread:445478 [wandb_init.py:init():880] starting backend
+2025-11-02 00:23:40,251 INFO    MainThread:445478 [wandb_init.py:init():883] sending inform_init request
+2025-11-02 00:23:40,252 INFO    MainThread:445478 [wandb_init.py:init():891] backend started and connected
+2025-11-02 00:23:40,253 INFO    MainThread:445478 [wandb_run.py:_label_probe_notebook():1330] probe notebook
+2025-11-02 00:23:40,253 INFO    MainThread:445478 [wandb_run.py:_label_probe_notebook():1340] Unable to probe notebook: 'NoneType' object has no attribute 'get'
+2025-11-02 00:23:40,253 INFO    MainThread:445478 [wandb_init.py:init():961] updated telemetry
+2025-11-02 00:23:40,256 INFO    MainThread:445478 [wandb_init.py:init():985] communicating run to backend with 90.0 second timeout
+2025-11-02 00:23:41,008 INFO    MainThread:445478 [wandb_init.py:init():1036] starting run threads in backend
+2025-11-02 00:23:41,073 INFO    MainThread:445478 [wandb_run.py:_console_start():2506] atexit reg
+2025-11-02 00:23:41,073 INFO    MainThread:445478 [wandb_run.py:_redirect():2354] redirect: wrap_raw
+2025-11-02 00:23:41,073 INFO    MainThread:445478 [wandb_run.py:_redirect():2423] Wrapping output streams.
+2025-11-02 00:23:41,074 INFO    MainThread:445478 [wandb_run.py:_redirect():2446] Redirects installed.
+2025-11-02 00:23:41,076 INFO    MainThread:445478 [wandb_init.py:init():1076] run started, returning control to user process
+2025-11-02 00:23:41,416 INFO    MainThread:445478 [wandb_init.py:_post_run_cell_hook():594] [no run ID] resuming backend
+2025-11-02 00:24:20,739 INFO    MainThread:445478 [jupyter.py:save_ipynb():404] [no run ID] not saving jupyter notebook
+2025-11-02 00:24:20,740 INFO    MainThread:445478 [wandb_init.py:_pre_run_cell_hook():583] [no run ID] pausing backend
+2025-11-02 00:24:20,754 INFO    MainThread:445478 [wandb_run.py:_finish():2272] finishing run rudiwinggla-montanuniversit-t-leoben/diffusion-barrier-AL/t69npbec
+2025-11-02 00:24:20,779 INFO    MainThread:445478 [jupyter.py:save_history():480] not saving jupyter history
+2025-11-02 00:24:20,779 INFO    MainThread:445478 [jupyter.py:save_ipynb():404] not saving jupyter notebook
+2025-11-02 00:24:20,779 INFO    MainThread:445478 [wandb_init.py:_jupyter_teardown():609] cleaning up jupyter logic
+2025-11-02 00:24:20,779 INFO    MainThread:445478 [wandb_run.py:_atexit_cleanup():2471] got exitcode: 0
+2025-11-02 00:24:20,779 INFO    MainThread:445478 [wandb_run.py:_restore():2453] restore
+2025-11-02 00:24:20,780 INFO    MainThread:445478 [wandb_run.py:_restore():2459] restore done
+2025-11-02 00:24:22,094 INFO    MainThread:445478 [wandb_run.py:_footer_sync_info():3869] logging synced files

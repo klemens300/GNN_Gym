@@ -1,0 +1,63 @@
+✓ Wandb initialized: AL-20251102-003048
+Oracle initialized
+  Database: database
+  CSV: database_navi.csv
+Bootstrap: CSV already populated -> database_navi.csv
+
+======================================================================
+CYCLE 0/10
+======================================================================
+✓ Database backed up: al_backups/database_cycle_0_20251102-003049.csv
+
+Database before cycle:
+  Samples: 15
+  Unique compositions: 15
+  Barrier range: [0.190, 37.628] eV
+
+→ Training initial model...
+
+======================================================================
+TRAINING MODEL - CYCLE 0
+======================================================================
+
+======================================================================
+CREATING DATALOADERS
+======================================================================
+
+Loading data from: database_navi.csv
+Barrier filter: [0.1, 15.0] eV
+✓ Detected elements from database: ['Cr', 'Mo', 'Nb', 'Ta', 'W']
+Building template graph...
+✓ Template created: 127 nodes, 1764 edges
+✓ Node features: 12 (pos: 3, one-hot: 5, props: 4)
+Dataset loaded: 14 samples
+  Removed 1 samples (barrier filtering)
+
+Dataset statistics:
+  Samples: 14
+  Barrier range: [0.190, 0.990] eV
+  Barrier mean: 0.565 ± 0.228 eV
+
+Splitting data:
+  Train: 12 samples (90%)
+  Val: 2 samples (10%)
+✓ Detected elements from database: ['Cr', 'Mo', 'Nb', 'Ta', 'W']
+Building template graph...
+✓ Template created: 127 nodes, 1764 edges
+✓ Node features: 12 (pos: 3, one-hot: 5, props: 4)
+✓ Detected elements from database: ['Cr', 'Mo', 'Nb', 'Ta', 'W']
+Building template graph...
+✓ Template created: 127 nodes, 1764 edges
+✓ Node features: 12 (pos: 3, one-hot: 5, props: 4)
+
+✓ Dataloaders created:
+  Train: 1 batches
+  Val: 1 batches
+======================================================================
+
+✓ Detected elements from database: ['Cr', 'Mo', 'Nb', 'Ta', 'W']
+Building template graph...
+✓ Template created: 127 nodes, 1764 edges
+✓ Node features: 12 (pos: 3, one-hot: 5, props: 4)
+
+Model parameters: 967,553

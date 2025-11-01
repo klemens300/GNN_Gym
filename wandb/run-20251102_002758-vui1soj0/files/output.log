@@ -1,0 +1,182 @@
+✓ Wandb initialized: AL-20251102-002758
+Oracle initialized
+  Database: database
+  CSV: database_navi.csv
+
+======================================================================
+BOOTSTRAP DATABASE (CSV was missing or empty)
+======================================================================
+Elements: ['Mo', 'Nb', 'Ta', 'W', 'Cr']
+Seed samples to generate: 16
+CSV target: database_navi.csv
+  [Bootstrap 1/16] {'Mo': 0.4892730361052506, 'Nb': 0.05492418883737019, 'Ta': 0.03686185931961547, 'W': 0.18123084768038938, 'Cr': 0.23771006805737432}
+
+Calculating Cr24Mo49Nb5Ta4W18 (run 1)... CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+✓ Completed in 5.2s
+  Diffusing element: Nb
+  Forward barrier: 0.248 eV
+  Backward barrier: 0.274 eV
+  Timing: relax=2.8s, neb=1.1s
+  [Bootstrap 2/16] {'Mo': 0.5791959120761239, 'Nb': 0.21374072257625432, 'Ta': 0.02555281892639804, 'W': 0.04627038221845102, 'Cr': 0.13524016420277293}
+
+Calculating Cr14Mo58Nb21Ta3W5 (run 1)... CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+✓ Completed in 32.3s
+  Diffusing element: Nb
+  Forward barrier: 38.018 eV
+  Backward barrier: 37.628 eV
+  Timing: relax=3.5s, neb=28.3s
+  [Bootstrap 3/16] {'Mo': 0.09463272483067878, 'Nb': 0.2967777841392964, 'Ta': 0.41661661426241514, 'W': 0.12107265168059583, 'Cr': 0.07090022508701378}
+
+Calculating Cr7Mo9Nb30Ta42W12 (run 1)... CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+✓ Completed in 6.2s
+  Diffusing element: Ta
+  Forward barrier: 0.732 eV
+  Backward barrier: 0.743 eV
+  Timing: relax=3.0s, neb=2.7s
+  [Bootstrap 4/16] {'Mo': 0.09519759602085477, 'Nb': 0.37168977978161244, 'Ta': 0.04186644593261159, 'W': 0.09732031352585394, 'Cr': 0.39392586473906716}
+
+Calculating Cr39Mo10Nb37Ta4W10 (run 1)... CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+✓ Completed in 9.8s
+  Diffusing element: Cr
+  Forward barrier: 0.104 eV
+  Backward barrier: 0.521 eV
+  Timing: relax=4.3s, neb=5.0s
+  [Bootstrap 5/16] {'Mo': 0.09473537438193526, 'Nb': 0.412289137861483, 'Ta': 0.3676571304617148, 'W': 0.04801727383150878, 'Cr': 0.07730108346335832}
+
+Calculating Cr8Mo9Nb41Ta37W5 (run 1)... CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+✓ Completed in 4.2s
+  Diffusing element: Ta
+  Forward barrier: 0.766 eV
+  Backward barrier: 0.190 eV
+  Timing: relax=0.6s, neb=3.1s
+  [Bootstrap 6/16] {'Mo': 0.10178078682261718, 'Nb': 0.10829658958790953, 'Ta': 0.08800140969626004, 'W': 0.14050650936886436, 'Cr': 0.5614147045243489}
+
+Calculating Cr56Mo10Nb11Ta9W14 (run 1)... CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+✓ Completed in 8.8s
+  Diffusing element: Cr
+  Forward barrier: 0.636 eV
+  Backward barrier: 0.680 eV
+  Timing: relax=4.9s, neb=3.4s
+  [Bootstrap 7/16] {'Mo': 0.05973483184462401, 'Nb': 0.6298418626145597, 'Ta': 0.1630256641153088, 'W': 0.03926420619426241, 'Cr': 0.10813343523124516}
+
+Calculating Cr11Mo6Nb63Ta16W4 (run 1)... CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+✓ Completed in 8.0s
+  Diffusing element: Nb
+  Forward barrier: 0.581 eV
+  Backward barrier: 0.350 eV
+  Timing: relax=4.7s, neb=2.7s
+  [Bootstrap 8/16] {'Mo': 0.10777042930217981, 'Nb': 0.13447818195675432, 'Ta': 0.1355710129176194, 'W': 0.5200698204546408, 'Cr': 0.10211055536880569}
+
+Calculating Cr10Mo11Nb13Ta14W52 (run 1)... CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+✓ Completed in 7.3s
+  Diffusing element: Ta
+  Forward barrier: 0.195 eV
+  Backward barrier: 0.407 eV
+  Timing: relax=4.5s, neb=2.2s
+  [Bootstrap 9/16] {'Mo': 0.12546868757447596, 'Nb': 0.21520551199344284, 'Ta': 0.24277204492646898, 'W': 0.052780753689279404, 'Cr': 0.36377300181633293}
+
+Calculating Cr36Mo13Nb22Ta24W5 (run 1)... CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+✓ Completed in 5.5s
+  Diffusing element: Nb
+  Forward barrier: 0.360 eV
+  Backward barrier: 0.514 eV
+  Timing: relax=2.0s, neb=2.8s
+  [Bootstrap 10/16] {'Mo': 0.13504846218132652, 'Nb': 0.043368076685366276, 'Ta': 0.3256367788726739, 'W': 0.4571773323224992, 'Cr': 0.03876934993813429}
+
+Calculating Cr4Mo14Nb4Ta33W46 (run 1)... CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+✓ Completed in 5.2s
+  Diffusing element: Ta
+  Forward barrier: 0.565 eV
+  Backward barrier: 0.826 eV
+  Timing: relax=1.9s, neb=2.8s
+  [Bootstrap 11/16] {'Mo': 0.21905878646602098, 'Nb': 0.1039300866313658, 'Ta': 0.5743779864677271, 'W': 0.07910211285634623, 'Cr': 0.02353102757853984}
+
+Calculating Cr2Mo22Nb10Ta57W8 (run 1)... CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+✓ Completed in 7.0s
+  Diffusing element: Nb
+  Forward barrier: 0.012 eV
+  Backward barrier: 0.404 eV
+  Timing: relax=4.3s, neb=2.2s
+  [Bootstrap 12/16] {'Mo': 0.12273225473553652, 'Nb': 0.24422686894601325, 'Ta': 0.039325075000715304, 'W': 0.24232611986520589, 'Cr': 0.3513896814525289}
+
+Calculating Cr35Mo12Nb24Ta4W24 (run 1)... CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+✓ Completed in 34.2s
+  Diffusing element: W
+  Forward barrier: 1.019 eV
+  Backward barrier: 0.990 eV
+  Timing: relax=3.6s, neb=30.0s
+  [Bootstrap 13/16] {'Mo': 0.005568236286712855, 'Nb': 0.2704344079175068, 'Ta': 0.05108058100622047, 'W': 0.35393589522925195, 'Cr': 0.318980879560308}
+
+Calculating Cr32Mo1Nb27Ta5W35 (run 1)... CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+✓ Completed in 8.6s
+  Diffusing element: Nb
+  Forward barrier: 0.861 eV
+  Backward barrier: 0.738 eV
+  Timing: relax=5.3s, neb=2.7s
+  [Bootstrap 14/16] {'Mo': 0.0319148541164075, 'Nb': 0.30786947348762095, 'Ta': 0.03975990622812825, 'W': 0.022052414484947137, 'Cr': 0.598403351682896}
+
+Calculating Cr60Mo3Nb31Ta4W2 (run 1)... CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+✓ Completed in 5.7s
+  Diffusing element: Ta
+  Forward barrier: 0.745 eV
+  Backward barrier: 0.551 eV
+  Timing: relax=2.7s, neb=2.5s
+  [Bootstrap 15/16] {'Mo': 0.06303161160642788, 'Nb': 0.1526888909380742, 'Ta': 0.09697962427966801, 'W': 0.17038003645163644, 'Cr': 0.5169198367241935}
+
+Calculating Cr52Mo6Nb15Ta10W17 (run 1)... CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+✓ Completed in 7.2s
+  Diffusing element: Cr
+  Forward barrier: 0.850 eV
+  Backward barrier: 0.724 eV
+  Timing: relax=4.8s, neb=1.9s
+  [Bootstrap 16/16] {'Mo': 0.11252680278328489, 'Nb': 0.46865779624204357, 'Ta': 0.35699787105784253, 'W': 0.024285068017027935, 'Cr': 0.03753246189980101}
+
+Calculating Cr4Mo11Nb47Ta36W2 (run 1)... CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda
+CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on cuda

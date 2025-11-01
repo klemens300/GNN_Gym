@@ -18,6 +18,12 @@ class Config:
     # ============================================================
     csv_path: str = "database_navi.csv"
     checkpoint_dir: str = "checkpoints"
+    database_dir: str = "database"          # Directory for structure files
+    
+    # ============================================================
+    # MATERIAL SYSTEM (Elements)
+    # ============================================================
+    elements: List[str] = field(default_factory=lambda: ['Mo', 'Nb', 'Ta', 'W', 'Cr'])
     
     # ============================================================
     # CRYSTAL STRUCTURE
@@ -54,7 +60,7 @@ class Config:
     gnn_embedding_dim: int = 64          # Output dimension of GNN encoder
     
     # MLP Predictor
-    mlp_hidden_dims: List[int] = field(default_factory=lambda: [1024, 512, 256])
+    mlp_hidden_dims: List[int] = field(default_factory=lambda: [512, 256, 128])
     dropout: float = 0.15                # Dropout rate
     
     # ============================================================
@@ -72,12 +78,50 @@ class Config:
     
     # Learning rate scheduling
     use_scheduler: bool = True           # Use learning rate scheduler
-    scheduler_type: str = "plateau"      # Scheduler type: "plateau", "cosine", "step", or "none"
+    scheduler_type: str = "cosine"      # Scheduler type: "plateau", "cosine", "step", or "none"
     scheduler_factor: float = 0.5        # Reduce LR by this factor (plateau, step)
     scheduler_patience: int = 10         # Patience for LR reduction (plateau)
     scheduler_step_size: int = 100       # Step size for StepLR (step)
     scheduler_t_max: int = 500           # T_max for CosineAnnealingLR (cosine)
     scheduler_eta_min: float = 1e-6      # Minimum LR for CosineAnnealingLR (cosine)
+    
+    # ============================================================
+    # NEB (Nudged Elastic Band) PARAMETERS
+    # ============================================================
+    neb_n_images: int = 3
+    neb_images: int = 3                # Number of images in NEB path
+    neb_spring_constant: float = 5.0     # Spring constant for NEB (eV/Angstrom^2)
+    neb_fmax: float = 0.05               # Force convergence criterion (eV/Angstrom)
+    neb_max_steps: int = 500             # Maximum optimization steps
+    neb_climb: bool = True               # Use climbing image NEB
+    neb_method: str = "aseneb"           # NEB method: "aseneb" or "dynneb"
+
+    # STRUCTURE RELAXATION (CHGNet)
+    relax_cell: bool = False              # Allow cell relaxation
+    relax_fmax: float = 0.1              # Force convergence for relaxation (eV/Angstrom)
+    relax_steps: int = 500               # Maximum relaxation steps
+    relax_max_steps: int = 500           # Maximum relaxation steps (alias for compatibility)
+    
+    # ============================================================
+    # ACTIVE LEARNING
+    # ============================================================
+    # Initial data generation (Cycle 0)
+    al_initial_samples: int = 50              # Initial random samples before AL starts
+
+    # Test set generation
+    al_n_test: int = 10                      # Number of test compositions per cycle
+    al_test_strategy: str = 'uniform'         # Test generation strategy: 'uniform', ...
+
+    # Query strategy
+    al_n_query: int = 10                      # Number of new training samples per cycle
+    al_query_strategy: str = 'error_weighted' # Query strategy: 'error_weighted', ...
+
+    # Active learning loop
+    al_max_cycles: int = 10                   # Maximum number of AL cycles
+    al_seed: int = 42                         # Random seed for AL (gets incremented per cycle)
+
+    # Output
+    al_results_dir: str = "active_learning_results"  # Directory for AL results
     
     # ============================================================
     # LOGGING (Weights & Biases)
@@ -150,10 +194,19 @@ if __name__ == "__main__":
     print("\nPATHS:")
     print(f"  csv_path: {config.csv_path}")
     print(f"  checkpoint_dir: {config.checkpoint_dir}")
+    print(f"  database_dir: {config.database_dir}")
+    
+    print("\nMATERIAL SYSTEM:")
+    print(f"  elements: {config.elements}")
     
     print("\nCRYSTAL STRUCTURE:")
     print(f"  supercell_size: {config.supercell_size}")
     print(f"  lattice_parameter: {config.lattice_parameter}")
+    
+    print("\nSTRUCTURE RELAXATION:")
+    print(f"  relax_cell: {config.relax_cell}")
+    print(f"  relax_fmax: {config.relax_fmax} eV/Å")
+    print(f"  relax_steps: {config.relax_steps}")
     
     print("\nGRAPH CONSTRUCTION:")
     print(f"  cutoff_radius: {config.cutoff_radius}")
@@ -189,6 +242,23 @@ if __name__ == "__main__":
     print(f"  scheduler_step_size: {config.scheduler_step_size}")
     print(f"  scheduler_t_max: {config.scheduler_t_max}")
     print(f"  scheduler_eta_min: {config.scheduler_eta_min}")
+    
+    print("\nNEB PARAMETERS:")
+    print(f"  neb_n_images: {config.neb_n_images}")
+    print(f"  neb_spring_constant: {config.neb_spring_constant} eV/Å²")
+    print(f"  neb_fmax: {config.neb_fmax} eV/Å")
+    print(f"  neb_max_steps: {config.neb_max_steps}")
+    print(f"  neb_climb: {config.neb_climb}")
+    print(f"  neb_method: {config.neb_method}")
+    
+    print("\nACTIVE LEARNING:")
+    print(f"  al_n_test: {config.al_n_test}")
+    print(f"  al_test_strategy: {config.al_test_strategy}")
+    print(f"  al_n_query: {config.al_n_query}")
+    print(f"  al_query_strategy: {config.al_query_strategy}")
+    print(f"  al_max_cycles: {config.al_max_cycles}")
+    print(f"  al_seed: {config.al_seed}")
+    print(f"  al_results_dir: {config.al_results_dir}")
     
     print("\nLOGGING (Weights & Biases):")
     print(f"  use_wandb: {config.use_wandb}")
