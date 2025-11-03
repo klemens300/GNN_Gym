@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 import torch
 import gc
+import logging
 from pathlib import Path
 from typing import List, Tuple
 from tqdm import tqdm
@@ -45,6 +46,53 @@ def cleanup_gpu():
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     gc.collect()
+
+
+# ============================================================================
+# LOGGER SETUP
+# ============================================================================
+
+def setup_inference_logger(cycle: int, config: Config):
+    """
+    Setup logger for inference cycle.
+    
+    Args:
+        cycle: Cycle number
+        config: Config object
+    
+    Returns:
+        logger: Configured logger
+    """
+    logger = logging.getLogger(f"inference_cycle_{cycle}")
+    logger.setLevel(getattr(logging, config.log_level.upper()))
+    logger.handlers = []  # Clear existing handlers
+    
+    # File handler
+    log_file = Path(config.log_dir) / f"inference_cycle_{cycle}.log"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    fh = logging.FileHandler(log_file)
+    fh.setLevel(getattr(logging, config.log_level.upper()))
+    
+    # Console handler (optional)
+    if config.log_to_console:
+        ch = logging.StreamHandler()
+        ch.setLevel(getattr(logging, config.log_level.upper()))
+    
+    # Formatter
+    formatter = logging.Formatter(
+        '%(asctime)s | %(levelname)-8s | %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    fh.setFormatter(formatter)
+    if config.log_to_console:
+        ch.setFormatter(formatter)
+    
+    # Add handlers
+    logger.addHandler(fh)
+    if config.log_to_console:
+        logger.addHandler(ch)
+    
+    return logger
 
 
 # ============================================================================
@@ -137,6 +185,7 @@ def generate_test_data_with_oracle(
     compositions: List[dict],
     oracle: Oracle,
     config: Config,
+    logger: logging.Logger = None,
     verbose: bool = True
 ) -> pd.DataFrame:
     """
@@ -151,6 +200,7 @@ def generate_test_data_with_oracle(
         compositions: List of composition dicts
         oracle: Oracle instance
         config: Config object
+        logger: Logger instance (optional)
         verbose: Print progress
     
     Returns:
@@ -164,15 +214,15 @@ def generate_test_data_with_oracle(
         >>> test_data = generate_test_data_with_oracle(comps, oracle, config)
         >>> print(test_data.head())
     """
-    if verbose:
-        print("\n" + "="*70)
-        print("GENERATING TEST DATA WITH ORACLE")
-        print("="*70)
-        print(f"Test compositions: {len(compositions)}")
+    if verbose and logger:
+        logger.info("="*70)
+        logger.info("GENERATING TEST DATA WITH ORACLE")
+        logger.info("="*70)
+        logger.info(f"Test compositions: {len(compositions)}")
     
     results = []
     
-    iterator = tqdm(compositions, desc="Oracle calculations") if verbose else compositions
+    iterator = tqdm(compositions, desc="Oracle calculations", disable=not verbose)
     
     for idx, comp in enumerate(iterator):
         # Format composition string
@@ -202,8 +252,8 @@ def generate_test_data_with_oracle(
                 })
                 
         except Exception as e:
-            if verbose:
-                print(f"\n  Error for {comp_str}: {e}")
+            if verbose and logger:
+                logger.error(f"Error for {comp_str}: {e}")
             
             results.append({
                 'composition': comp_str,
@@ -217,13 +267,13 @@ def generate_test_data_with_oracle(
     
     df = pd.DataFrame(results)
     
-    if verbose:
+    if verbose and logger:
         success_rate = df['success'].sum() / len(df) * 100
-        print(f"\n✓ Test data generated")
-        print(f"  Success rate: {success_rate:.1f}% ({df['success'].sum()}/{len(df)})")
+        logger.info(f"✓ Test data generated")
+        logger.info(f"  Success rate: {success_rate:.1f}% ({df['success'].sum()}/{len(df)})")
         if df['success'].any():
             successful = df[df['success']]
-            print(f"  Barrier range: [{successful['oracle_barrier'].min():.3f}, "
+            logger.info(f"  Barrier range: [{successful['oracle_barrier'].min():.3f}, "
                   f"{successful['oracle_barrier'].max():.3f}] eV")
     
     return df
@@ -237,6 +287,7 @@ def predict_barriers_for_test_set(
     model_path: str,
     test_data: pd.DataFrame,
     config: Config,
+    logger: logging.Logger = None,
     verbose: bool = True
 ) -> pd.DataFrame:
     """
@@ -246,6 +297,7 @@ def predict_barriers_for_test_set(
         model_path: Path to trained model checkpoint
         test_data: DataFrame from generate_test_data_with_oracle()
         config: Config object
+        logger: Logger instance (optional)
         verbose: Print progress
     
     Returns:
@@ -259,12 +311,12 @@ def predict_barriers_for_test_set(
         ...     'checkpoints/best_model.pt', test_data, config
         ... )
     """
-    if verbose:
-        print("\n" + "="*70)
-        print("MODEL PREDICTIONS")
-        print("="*70)
-        print(f"Model: {model_path}")
-        print(f"Test samples: {len(test_data)}")
+    if verbose and logger:
+        logger.info("="*70)
+        logger.info("MODEL PREDICTIONS")
+        logger.info("="*70)
+        logger.info(f"Model: {model_path}")
+        logger.info(f"Test samples: {len(test_data)}")
     
     # Load model
     model, checkpoint = load_model_for_inference(model_path, config, validate=False)
@@ -280,7 +332,7 @@ def predict_barriers_for_test_set(
     
     if len(test_data_filtered) == 0:
         if verbose:
-            print("\n⚠️  No successful oracle calculations to predict!")
+            if logger: logger.info(f"\n⚠️  No successful oracle calculations to predict!")
         return pd.DataFrame(columns=[
             'composition', 'oracle_barrier', 'predicted_barrier',
             'absolute_error', 'relative_error', 'structure_folder'
@@ -302,7 +354,7 @@ def predict_barriers_for_test_set(
             # Check if files exist
             if not initial_cif.exists() or not final_cif.exists():
                 if verbose:
-                    print(f"\n  Structures not found for {row['composition']}")
+                    if logger: logger.info(f"\n  Structures not found for {row['composition']}")
                 predictions.append({
                     'composition': row['composition'],
                     'oracle_barrier': row['oracle_barrier'],
@@ -347,7 +399,7 @@ def predict_barriers_for_test_set(
             
         except Exception as e:
             if verbose:
-                print(f"\n  Prediction error for {row['composition']}: {e}")
+                if logger: logger.info(f"\n  Prediction error for {row['composition']}: {e}")
             
             predictions.append({
                 'composition': row['composition'],
@@ -370,14 +422,14 @@ def predict_barriers_for_test_set(
         else:
             valid = pd.DataFrame()
         
-        print(f"\n✓ Predictions completed")
-        print(f"  Valid predictions: {len(valid)}/{len(df)}")
+        if logger: logger.info(f"\n✓ Predictions completed")
+        if logger: logger.info(f"  Valid predictions: {len(valid)}/{len(df)}")
         if len(valid) > 0:
-            print(f"  Mean absolute error: {valid['absolute_error'].mean():.3f} eV")
-            print(f"  Mean relative error: {valid['relative_error'].mean():.3f}")
-            print(f"  Median relative error: {valid['relative_error'].median():.3f}")
+            if logger: logger.info(f"  Mean absolute error: {valid['absolute_error'].mean():.3f} eV")
+            if logger: logger.info(f"  Mean relative error: {valid['relative_error'].mean():.3f}")
+            if logger: logger.info(f"  Median relative error: {valid['relative_error'].median():.3f}")
         else:
-            print(f"  ⚠️  No valid predictions generated!")
+            if logger: logger.info(f"  ⚠️  No valid predictions generated!")
     
     return df
 
@@ -390,7 +442,8 @@ def select_samples_by_error(
     predictions: pd.DataFrame,
     n_query: int,
     strategy: str = 'error_weighted',
-    seed: int = 42
+    seed: int = 42,
+    logger: logging.Logger = None
 ) -> List[dict]:
     """
     Select samples based on prediction error.
@@ -412,7 +465,7 @@ def select_samples_by_error(
     
     Example:
         >>> selected = select_samples_by_error(predictions, n_query=20)
-        >>> print(f"Selected {len(selected)} samples")
+        >>> if logger: logger.info(f"Selected {len(selected)} samples")
     """
     if strategy == 'error_weighted':
         return error_weighted_sampling(predictions, n_query, seed)
@@ -447,7 +500,7 @@ def error_weighted_sampling(
     valid = predictions.dropna(subset=['relative_error']).copy()
     
     if len(valid) == 0:
-        print("Warning: No valid predictions for query selection!")
+        if logger: logger.info(f"Warning: No valid predictions for query selection!")
         return []
     
     # Adjust n_query if necessary
@@ -460,7 +513,7 @@ def error_weighted_sampling(
     total_error = errors.sum()
     
     if total_error == 0:
-        print("Warning: Total error is zero, using uniform sampling")
+        if logger: logger.info(f"Warning: Total error is zero, using uniform sampling")
         probabilities = np.ones(len(errors)) / len(errors)
     else:
         probabilities = errors / total_error
@@ -498,41 +551,19 @@ def error_weighted_sampling(
 
 
 # ============================================================================
-# 5. CSV MANAGEMENT
+# 5. CSV MANAGEMENT (DISABLED - not needed anymore)
 # ============================================================================
 
-def save_cycle_predictions(
-    predictions: pd.DataFrame,
-    cycle: int,
-    output_dir: str = "active_learning_results"
-):
-    """
-    Save predictions CSV for this cycle.
-    
-    Args:
-        predictions: Predictions DataFrame
-        cycle: Cycle number
-        output_dir: Output directory
-    
-    Saves to: {output_dir}/cycle_{cycle}_predictions.csv
-    
-    Columns:
-    - composition
-    - oracle_barrier
-    - predicted_barrier
-    - relative_error
-    - absolute_error
-    - selected_for_training
-    - structure_folder
-    """
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-    
-    filename = output_path / f"cycle_{cycle}_predictions.csv"
-    
-    predictions.to_csv(filename, index=False)
-    
-    print(f"\n✓ Predictions saved: {filename}")
+# def save_cycle_predictions(
+#     predictions: pd.DataFrame,
+#     cycle: int,
+#     output_dir: str = "active_learning_results"
+# ):
+#     """
+#     Save predictions CSV for this cycle.
+#     DISABLED: Active learning reports not needed anymore.
+#     """
+#     pass
 
 
 def load_cycle_predictions(
@@ -617,9 +648,8 @@ def run_inference_cycle(
     2. Oracle generates ground truth barriers + GPU cleanup
     3. Model predicts barriers + GPU cleanup
     4. Calculate errors (relative & absolute)
-    5. Save predictions to CSV
-    6. Select n_query samples (error-weighted)
-    7. Return selected compositions for training
+    5. Select n_query samples (error-weighted)
+    6. Return selected compositions for training
     
     Args:
         cycle: Cycle number (for logging/saving)
@@ -639,16 +669,19 @@ def run_inference_cycle(
         ...     oracle=oracle,
         ...     config=config
         ... )
-        >>> print(f"Selected {len(selected)} samples for next training")
+        >>> logger.info(f"Selected {len(selected)} samples for next training")
     """
+    # Setup logger for this cycle
+    logger = setup_inference_logger(cycle, config)
+    
     if verbose:
-        print("\n" + "="*70)
-        print(f"INFERENCE CYCLE {cycle}")
-        print("="*70)
-        print(f"Test samples (n_test): {config.al_n_test}")
-        print(f"Query samples (n_query): {config.al_n_query}")
-        print(f"Test strategy: {config.al_test_strategy}")
-        print(f"Query strategy: {config.al_query_strategy}")
+        logger.info("="*70)
+        logger.info(f"INFERENCE CYCLE {cycle}")
+        logger.info("="*70)
+        logger.info(f"Test samples (n_test): {config.al_n_test}")
+        logger.info(f"Query samples (n_query): {config.al_n_query}")
+        logger.info(f"Test strategy: {config.al_test_strategy}")
+        logger.info(f"Query strategy: {config.al_query_strategy}")
     
     # 1. Generate test compositions
     builder = TemplateGraphBuilder(config)
@@ -666,6 +699,7 @@ def run_inference_cycle(
         compositions=test_compositions,
         oracle=oracle,
         config=config,
+        logger=logger,
         verbose=verbose
     )
     
@@ -674,6 +708,7 @@ def run_inference_cycle(
         model_path=model_path,
         test_data=test_data,
         config=config,
+        logger=logger,
         verbose=verbose
     )
     
@@ -682,25 +717,21 @@ def run_inference_cycle(
         predictions=predictions,
         n_query=config.al_n_query,
         strategy=config.al_query_strategy,
-        seed=config.al_seed + cycle
+        seed=config.al_seed + cycle,
+        logger=logger
     )
     
     if verbose:
-        print(f"\n✓ Selected {len(selected_compositions)} samples for training")
+        logger.info(f"✓ Selected {len(selected_compositions)} samples for training")
         if len(selected_compositions) > 0:
             errors = [s['relative_error'] for s in selected_compositions]
-            print(f"  Error range: [{min(errors):.3f}, {max(errors):.3f}]")
-            print(f"  Mean error: {np.mean(errors):.3f}")
+            logger.info(f"  Error range: [{min(errors):.3f}, {max(errors):.3f}]")
+            logger.info(f"  Mean error: {np.mean(errors):.3f}")
     
-    # 5. Save predictions
-    save_cycle_predictions(
-        predictions=predictions,
-        cycle=cycle,
-        output_dir=config.al_results_dir
-    )
+    # Note: save_cycle_predictions() removed (Issue #4)
     
     if verbose:
-        print("="*70 + "\n")
+        logger.info("="*70)
     
     return selected_compositions, predictions
 
@@ -710,12 +741,12 @@ def run_inference_cycle(
 # ============================================================================
 
 if __name__ == "__main__":
-    print("inference.py - Import and use run_inference_cycle()")
-    print("\nExample:")
-    print("  from inference import run_inference_cycle")
-    print("  selected, predictions = run_inference_cycle(")
-    print("      cycle=0,")
-    print("      model_path='checkpoints/best_model.pt',")
-    print("      oracle=oracle,")
-    print("      config=config")
-    print("  )")
+    if logger: logger.info(f"inference.py - Import and use run_inference_cycle()")
+    if logger: logger.info(f"\nExample:")
+    if logger: logger.info(f"  from inference import run_inference_cycle")
+    if logger: logger.info(f"  selected, predictions = run_inference_cycle(")
+    if logger: logger.info(f"      cycle=0,")
+    if logger: logger.info(f"      model_path='checkpoints/best_model.pt',")
+    if logger: logger.info(f"      oracle=oracle,")
+    if logger: logger.info(f"      config=config")
+    if logger: logger.info(f"  )")

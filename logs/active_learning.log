@@ -1,0 +1,153 @@
+2025-11-03 23:12:28 | INFO     | ======================================================================
+2025-11-03 23:12:28 | INFO     | CURRENT CONFIG
+2025-11-03 23:12:28 | INFO     | ======================================================================
+2025-11-03 23:12:28 | INFO     | csv_path                 : MoNbTaW.csv
+2025-11-03 23:12:28 | INFO     | checkpoint_dir           : checkpoints
+2025-11-03 23:12:28 | INFO     | database_dir             : MoNbTaW
+2025-11-03 23:12:28 | INFO     | elements                 : ['Mo', 'Nb', 'Ta', 'W']
+2025-11-03 23:12:28 | INFO     | supercell_size           : 4
+2025-11-03 23:12:28 | INFO     | lattice_parameter        : 3.2
+2025-11-03 23:12:28 | INFO     | cutoff_radius            : 3.5
+2025-11-03 23:12:28 | INFO     | max_neighbors            : 50
+2025-11-03 23:12:28 | INFO     | batch_size               : 32
+2025-11-03 23:12:28 | INFO     | num_workers              : 0
+2025-11-03 23:12:28 | INFO     | min_barrier              : 0.1
+2025-11-03 23:12:28 | INFO     | max_barrier              : 5.0
+2025-11-03 23:12:28 | INFO     | val_split                : 0.1
+2025-11-03 23:12:28 | INFO     | random_seed              : 42
+2025-11-03 23:12:28 | INFO     | gnn_hidden_dim           : 64
+2025-11-03 23:12:28 | INFO     | gnn_num_layers           : 5
+2025-11-03 23:12:28 | INFO     | gnn_embedding_dim        : 64
+2025-11-03 23:12:28 | INFO     | mlp_hidden_dims          : [1024, 512, 256]
+2025-11-03 23:12:28 | INFO     | dropout                  : 0.1
+2025-11-03 23:12:28 | INFO     | learning_rate            : 0.0005
+2025-11-03 23:12:28 | INFO     | weight_decay             : 0.01
+2025-11-03 23:12:28 | INFO     | gradient_clip_norm       : 1.0
+2025-11-03 23:12:28 | INFO     | epochs                   : 5000
+2025-11-03 23:12:28 | INFO     | patience                 : 30
+2025-11-03 23:12:28 | INFO     | save_interval            : 50
+2025-11-03 23:12:28 | INFO     | use_scheduler            : True
+2025-11-03 23:12:28 | INFO     | scheduler_type           : cosine
+2025-11-03 23:12:28 | INFO     | scheduler_factor         : 0.5
+2025-11-03 23:12:28 | INFO     | scheduler_patience       : 10
+2025-11-03 23:12:28 | INFO     | scheduler_step_size      : 100
+2025-11-03 23:12:28 | INFO     | scheduler_t_max          : 250
+2025-11-03 23:12:28 | INFO     | scheduler_eta_min        : 1e-06
+2025-11-03 23:12:28 | INFO     | neb_n_images             : 3
+2025-11-03 23:12:28 | INFO     | neb_images               : 3
+2025-11-03 23:12:28 | INFO     | neb_spring_constant      : 5.0
+2025-11-03 23:12:28 | INFO     | neb_fmax                 : 0.05
+2025-11-03 23:12:28 | INFO     | neb_max_steps            : 500
+2025-11-03 23:12:28 | INFO     | neb_climb                : True
+2025-11-03 23:12:28 | INFO     | neb_method               : aseneb
+2025-11-03 23:12:28 | INFO     | relax_cell               : False
+2025-11-03 23:12:28 | INFO     | relax_fmax               : 0.1
+2025-11-03 23:12:28 | INFO     | relax_steps              : 500
+2025-11-03 23:12:28 | INFO     | relax_max_steps          : 500
+2025-11-03 23:12:28 | INFO     | al_initial_samples       : 2500
+2025-11-03 23:12:28 | INFO     | al_n_test                : 250
+2025-11-03 23:12:28 | INFO     | al_test_strategy         : uniform
+2025-11-03 23:12:28 | INFO     | al_n_query               : 500
+2025-11-03 23:12:28 | INFO     | al_query_strategy        : error_weighted
+2025-11-03 23:12:28 | INFO     | al_max_cycles            : 10
+2025-11-03 23:12:28 | INFO     | al_seed                  : 42
+2025-11-03 23:12:28 | INFO     | al_results_dir           : active_learning_results
+2025-11-03 23:12:28 | INFO     | log_dir                  : logs
+2025-11-03 23:12:28 | INFO     | log_level                : INFO
+2025-11-03 23:12:28 | INFO     | log_to_console           : True
+2025-11-03 23:12:28 | INFO     | loss_function            : mse
+2025-11-03 23:12:28 | INFO     | use_wandb                : True
+2025-11-03 23:12:28 | INFO     | wandb_project            : GNN_Gym_final_test
+2025-11-03 23:12:28 | INFO     | wandb_entity             : None
+2025-11-03 23:12:28 | INFO     | wandb_run_name           : None
+2025-11-03 23:12:28 | INFO     | wandb_tags               : []
+2025-11-03 23:12:28 | INFO     | wandb_notes              : 
+2025-11-03 23:12:28 | INFO     | wandb_log_interval       : 1
+2025-11-03 23:12:28 | INFO     | wandb_watch_model        : True
+2025-11-03 23:12:28 | INFO     | wandb_watch_freq         : 10
+2025-11-03 23:12:28 | INFO     | ======================================================================
+2025-11-03 23:13:27 | INFO     | ======================================================================
+2025-11-03 23:13:27 | INFO     | CURRENT CONFIG
+2025-11-03 23:13:27 | INFO     | ======================================================================
+2025-11-03 23:13:27 | INFO     | csv_path                 : MoNbTaW.csv
+2025-11-03 23:13:27 | INFO     | checkpoint_dir           : checkpoints
+2025-11-03 23:13:27 | INFO     | database_dir             : MoNbTaW
+2025-11-03 23:13:27 | INFO     | elements                 : ['Mo', 'Nb', 'Ta', 'W']
+2025-11-03 23:13:27 | INFO     | supercell_size           : 4
+2025-11-03 23:13:27 | INFO     | lattice_parameter        : 3.2
+2025-11-03 23:13:27 | INFO     | cutoff_radius            : 3.5
+2025-11-03 23:13:27 | INFO     | max_neighbors            : 50
+2025-11-03 23:13:27 | INFO     | batch_size               : 32
+2025-11-03 23:13:27 | INFO     | num_workers              : 0
+2025-11-03 23:13:27 | INFO     | min_barrier              : 0.1
+2025-11-03 23:13:27 | INFO     | max_barrier              : 5.0
+2025-11-03 23:13:27 | INFO     | val_split                : 0.1
+2025-11-03 23:13:27 | INFO     | random_seed              : 42
+2025-11-03 23:13:27 | INFO     | gnn_hidden_dim           : 64
+2025-11-03 23:13:27 | INFO     | gnn_num_layers           : 5
+2025-11-03 23:13:27 | INFO     | gnn_embedding_dim        : 64
+2025-11-03 23:13:27 | INFO     | mlp_hidden_dims          : [1024, 512, 256]
+2025-11-03 23:13:27 | INFO     | dropout                  : 0.1
+2025-11-03 23:13:27 | INFO     | learning_rate            : 0.0005
+2025-11-03 23:13:27 | INFO     | weight_decay             : 0.01
+2025-11-03 23:13:27 | INFO     | gradient_clip_norm       : 1.0
+2025-11-03 23:13:27 | INFO     | epochs                   : 5000
+2025-11-03 23:13:27 | INFO     | patience                 : 30
+2025-11-03 23:13:27 | INFO     | save_interval            : 50
+2025-11-03 23:13:27 | INFO     | use_scheduler            : True
+2025-11-03 23:13:27 | INFO     | scheduler_type           : cosine
+2025-11-03 23:13:27 | INFO     | scheduler_factor         : 0.5
+2025-11-03 23:13:27 | INFO     | scheduler_patience       : 10
+2025-11-03 23:13:27 | INFO     | scheduler_step_size      : 100
+2025-11-03 23:13:27 | INFO     | scheduler_t_max          : 250
+2025-11-03 23:13:27 | INFO     | scheduler_eta_min        : 1e-06
+2025-11-03 23:13:27 | INFO     | neb_n_images             : 3
+2025-11-03 23:13:27 | INFO     | neb_images               : 3
+2025-11-03 23:13:27 | INFO     | neb_spring_constant      : 5.0
+2025-11-03 23:13:27 | INFO     | neb_fmax                 : 0.05
+2025-11-03 23:13:27 | INFO     | neb_max_steps            : 500
+2025-11-03 23:13:27 | INFO     | neb_climb                : True
+2025-11-03 23:13:27 | INFO     | neb_method               : aseneb
+2025-11-03 23:13:27 | INFO     | relax_cell               : False
+2025-11-03 23:13:27 | INFO     | relax_fmax               : 0.1
+2025-11-03 23:13:27 | INFO     | relax_steps              : 500
+2025-11-03 23:13:27 | INFO     | relax_max_steps          : 500
+2025-11-03 23:13:27 | INFO     | al_initial_samples       : 2500
+2025-11-03 23:13:27 | INFO     | al_n_test                : 250
+2025-11-03 23:13:27 | INFO     | al_test_strategy         : uniform
+2025-11-03 23:13:27 | INFO     | al_n_query               : 500
+2025-11-03 23:13:27 | INFO     | al_query_strategy        : error_weighted
+2025-11-03 23:13:27 | INFO     | al_max_cycles            : 10
+2025-11-03 23:13:27 | INFO     | al_seed                  : 42
+2025-11-03 23:13:27 | INFO     | al_results_dir           : active_learning_results
+2025-11-03 23:13:27 | INFO     | log_dir                  : logs
+2025-11-03 23:13:27 | INFO     | log_level                : INFO
+2025-11-03 23:13:27 | INFO     | log_to_console           : True
+2025-11-03 23:13:27 | INFO     | loss_function            : mse
+2025-11-03 23:13:27 | INFO     | use_wandb                : True
+2025-11-03 23:13:27 | INFO     | wandb_project            : GNN_Gym_final_test_debug_1
+2025-11-03 23:13:27 | INFO     | wandb_entity             : None
+2025-11-03 23:13:27 | INFO     | wandb_run_name           : None
+2025-11-03 23:13:27 | INFO     | wandb_tags               : []
+2025-11-03 23:13:27 | INFO     | wandb_notes              : 
+2025-11-03 23:13:27 | INFO     | wandb_log_interval       : 1
+2025-11-03 23:13:27 | INFO     | wandb_watch_model        : True
+2025-11-03 23:13:27 | INFO     | wandb_watch_freq         : 10
+2025-11-03 23:13:27 | INFO     | ======================================================================
+2025-11-03 23:13:29 | INFO     | ======================================================================
+2025-11-03 23:13:29 | INFO     | ACTIVE LEARNING LOOP STARTING
+2025-11-03 23:13:29 | INFO     | ======================================================================
+2025-11-03 23:13:29 | INFO     | Cycles: 10
+2025-11-03 23:13:29 | INFO     | Test samples per cycle: 250
+2025-11-03 23:13:29 | INFO     | Query samples per cycle: 500
+2025-11-03 23:13:29 | INFO     | Elements: ['Mo', 'Nb', 'Ta', 'W']
+2025-11-03 23:13:29 | INFO     | ======================================================================
+2025-11-03 23:13:29 | INFO     | ✓ Database found: MoNbTaW.csv
+2025-11-03 23:13:29 | INFO     | ======================================================================
+2025-11-03 23:13:29 | INFO     | Cycle 0/9
+2025-11-03 23:13:29 | INFO     | ======================================================================
+2025-11-03 23:13:29 | INFO     | Current database: 5000 samples, 4950 compositions
+2025-11-03 23:13:29 | INFO     | → Training initial model ...
+2025-11-03 23:13:29 | INFO     | ======================================================================
+2025-11-03 23:13:29 | INFO     | TRAINING MODEL - CYCLE 0
+2025-11-03 23:13:29 | INFO     | ======================================================================

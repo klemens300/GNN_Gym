@@ -14,6 +14,7 @@ import sys
 import csv
 import json
 import time
+import logging
 import numpy as np
 import pandas as pd
 from datetime import datetime
@@ -72,15 +73,51 @@ class Oracle:
         self.database_dir = Path(config.database_dir)
         self.csv_path = Path(config.csv_path)
         
+        # Setup logger
+        log_file = Path(config.log_dir) / "oracle.log"
+        self.logger = self._setup_logger(log_file, config.log_level, config.log_to_console)
+        
         # Create database directory
         self.database_dir.mkdir(exist_ok=True)
         
         # Initialize CSV if needed
         self._init_csv()
         
-        print(f"Oracle initialized")
-        print(f"  Database: {self.database_dir}")
-        print(f"  CSV: {self.csv_path}")
+        self.logger.info("Oracle initialized")
+        self.logger.info(f"  Database: {self.database_dir}")
+        self.logger.info(f"  CSV: {self.csv_path}")
+    
+    def _setup_logger(self, log_file: Path, level: str = "INFO", also_console: bool = True):
+        """Setup logger for Oracle."""
+        logger = logging.getLogger("oracle")
+        logger.setLevel(getattr(logging, level.upper()))
+        logger.handlers = []  # Clear existing handlers
+        
+        # File handler
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        fh = logging.FileHandler(log_file)
+        fh.setLevel(getattr(logging, level.upper()))
+        
+        # Console handler (optional)
+        if also_console:
+            ch = logging.StreamHandler()
+            ch.setLevel(getattr(logging, level.upper()))
+        
+        # Formatter
+        formatter = logging.Formatter(
+            '%(asctime)s | %(levelname)-8s | %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        fh.setFormatter(formatter)
+        if also_console:
+            ch.setFormatter(formatter)
+        
+        # Add handlers
+        logger.addHandler(fh)
+        if also_console:
+            logger.addHandler(ch)
+        
+        return logger
     
     def _init_csv(self):
         """Initialize CSV with headers if it doesn't exist"""
@@ -449,7 +486,7 @@ class Oracle:
         comp_string = self._composition_to_string(composition)
         run_number = self._get_next_run_number(comp_string)
         
-        print(f"\nCalculating {comp_string} (run {run_number})...", end=' ', flush=True)
+        self.logger.info(f"Calculating {comp_string} (run {run_number})...")
         
         try:
             # 1. Generate BCC structure
@@ -550,16 +587,16 @@ class Oracle:
                 ])
                 writer.writerow(row)
             
-            print(f"✓ Completed in {total_time:.1f}s")
-            print(f"  Diffusing element: {diffusing_element}")
-            print(f"  Forward barrier: {forward_barrier:.3f} eV")
-            print(f"  Backward barrier: {backward_barrier:.3f} eV")
-            print(f"  Timing: relax={initial_relax_time+final_relax_time:.1f}s, neb={neb_time:.1f}s")
+            self.logger.info(f"✓ Completed in {total_time:.1f}s")
+            self.logger.info(f"  Diffusing element: {diffusing_element}")
+            self.logger.info(f"  Forward barrier: {forward_barrier:.3f} eV")
+            self.logger.info(f"  Backward barrier: {backward_barrier:.3f} eV")
+            self.logger.info(f"  Timing: relax={initial_relax_time+final_relax_time:.1f}s, neb={neb_time:.1f}s")
             
             return True
             
         except Exception as e:
-            print(f"✗ Failed: {e}")
+            self.logger.error(f"✗ Failed: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -569,7 +606,7 @@ class Oracle:
         Cleanup CHGNet models and GPU memory.
         Call after completing calculations.
         """
-        print("\nCleaning up CHGNet models and GPU memory...")
+        self.logger.info("Cleaning up CHGNet models and GPU memory...")
         
         gc.collect()
         
@@ -589,7 +626,7 @@ class Oracle:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         
-        print("✓ Cleanup complete")
+        self.logger.info("✓ Cleanup complete")
     
     def __enter__(self):
         """Context manager entry"""

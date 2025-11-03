@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 from pathlib import Path
 import json
+import logging
 from typing import Optional
 
 # Wandb import (optional, graceful fallback)
@@ -16,7 +17,50 @@ try:
     WANDB_AVAILABLE = True
 except ImportError:
     WANDB_AVAILABLE = False
-    print("Warning: wandb not installed. Install with: pip install wandb")
+
+
+def setup_logger(name: str, log_file: Path, level: str = "INFO", also_console: bool = True):
+    """
+    Setup a logger that writes to file and optionally console.
+    
+    Args:
+        name: Logger name
+        log_file: Path to log file
+        level: Logging level (DEBUG, INFO, WARNING, ERROR)
+        also_console: Also log to console
+    
+    Returns:
+        logger: Configured logger
+    """
+    logger = logging.getLogger(name)
+    logger.setLevel(getattr(logging, level.upper()))
+    logger.handlers = []  # Clear existing handlers
+    
+    # File handler
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    fh = logging.FileHandler(log_file)
+    fh.setLevel(getattr(logging, level.upper()))
+    
+    # Console handler (optional)
+    if also_console:
+        ch = logging.StreamHandler()
+        ch.setLevel(getattr(logging, level.upper()))
+    
+    # Formatter
+    formatter = logging.Formatter(
+        '%(asctime)s | %(levelname)-8s | %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    fh.setFormatter(formatter)
+    if also_console:
+        ch.setFormatter(formatter)
+    
+    # Add handlers
+    logger.addHandler(fh)
+    if also_console:
+        logger.addHandler(ch)
+    
+    return logger
 
 
 class Trainer:
@@ -32,24 +76,54 @@ class Trainer:
     - Weights & Biases integration
     """
     
-    def __init__(self, model, config, save_dir: str = "checkpoints"):
+    def __init__(self, model, config, save_dir: str = "checkpoints", cycle: int = None):
         """
         Args:
             model: DiffusionBarrierModel instance
             config: Config object
             save_dir: Directory to save checkpoints
+            cycle: Active learning cycle number (for logging)
         """
         self.model = model
         self.config = config
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(parents=True, exist_ok=True)
+        self.cycle = cycle
+        
+        # Setup logger
+        log_name = f"cycle_{cycle}" if cycle is not None else "training"
+        log_file = Path(config.log_dir) / f"{log_name}.log"
+        self.logger = setup_logger(
+            name=f"trainer_{log_name}",
+            log_file=log_file,
+            level=config.log_level,
+            also_console=config.log_to_console
+        )
+        
+        self.logger.info("="*70)
+        self.logger.info("TRAINER INITIALIZATION")
+        self.logger.info("="*70)
         
         # Device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = self.model.to(self.device)
+        self.logger.info(f"Device: {self.device}")
         
-        # Loss function
-        self.criterion = nn.MSELoss()
+        # Loss function (configurable)
+        loss_fn_name = config.loss_function.lower()
+        if loss_fn_name == "mse":
+            self.criterion = nn.MSELoss()
+        elif loss_fn_name == "mae" or loss_fn_name == "l1":
+            self.criterion = nn.L1Loss()
+        elif loss_fn_name == "huber":
+            self.criterion = nn.HuberLoss()
+        elif loss_fn_name == "smooth_l1":
+            self.criterion = nn.SmoothL1Loss()
+        else:
+            self.logger.warning(f"Unknown loss function '{loss_fn_name}', using MSE")
+            self.criterion = nn.MSELoss()
+        
+        self.logger.info(f"Loss function: {self.criterion.__class__.__name__}")
         
         # Optimizer
         self.optimizer = torch.optim.AdamW(
@@ -57,6 +131,7 @@ class Trainer:
             lr=config.learning_rate,
             weight_decay=config.weight_decay
         )
+        self.logger.info(f"Optimizer: AdamW (lr={config.learning_rate}, wd={config.weight_decay})")
         
         # Scheduler - flexible based on config
         self.scheduler = self._create_scheduler()
@@ -77,6 +152,11 @@ class Trainer:
         self.use_wandb = config.use_wandb and WANDB_AVAILABLE
         if self.use_wandb:
             self._init_wandb()
+        else:
+            if config.use_wandb and not WANDB_AVAILABLE:
+                self.logger.warning("Wandb requested but not available. Install with: pip install wandb")
+        
+        self.logger.info("="*70)
     
     def _init_wandb(self):
         """Initialize Weights & Biases logging."""
@@ -88,6 +168,7 @@ class Trainer:
             'gnn_embedding_dim': self.config.gnn_embedding_dim,
             'mlp_hidden_dims': self.config.mlp_hidden_dims,
             'dropout': self.config.dropout,
+            'loss_function': self.config.loss_function,
             
             # Training
             'learning_rate': self.config.learning_rate,
@@ -101,6 +182,7 @@ class Trainer:
             'scheduler_type': self.config.scheduler_type if self.config.use_scheduler else 'none',
             'scheduler_factor': self.config.scheduler_factor,
             'scheduler_patience': self.config.scheduler_patience,
+            'scheduler_t_max': self.config.scheduler_t_max,
             
             # Data
             'min_barrier': self.config.min_barrier,
@@ -111,12 +193,17 @@ class Trainer:
             'cutoff_radius': self.config.cutoff_radius,
             'max_neighbors': self.config.max_neighbors,
             'supercell_size': self.config.supercell_size,
+            
+            # Active learning
+            'cycle': self.cycle if self.cycle is not None else 'N/A'
         }
         
-        # Generate run name if not provided
+        # Generate run name with cycle info
         run_name = self.config.wandb_run_name
         if run_name is None:
-            run_name = self.config.get_experiment_name()
+            run_name = self.config.get_experiment_name(cycle=self.cycle)
+        elif self.cycle is not None:
+            run_name = f"{run_name}_cycle{self.cycle}"
         
         # Initialize wandb
         wandb.init(
@@ -137,9 +224,9 @@ class Trainer:
                 log_freq=self.config.wandb_watch_freq
             )
         
-        print(f"✓ Wandb initialized: {wandb.run.name}")
-        print(f"  Project: {self.config.wandb_project}")
-        print(f"  URL: {wandb.run.url}")
+        self.logger.info(f"Wandb initialized: {wandb.run.name}")
+        self.logger.info(f"  Project: {self.config.wandb_project}")
+        self.logger.info(f"  URL: {wandb.run.url}")
     
     def _create_scheduler(self):
         """
@@ -179,7 +266,7 @@ class Trainer:
             return None
         
         else:
-            print(f"Warning: Unknown scheduler type '{scheduler_type}', not using scheduler")
+            self.logger.warning(f"Unknown scheduler type '{scheduler_type}', not using scheduler")
             return None
     
     def _step_scheduler(self, val_loss: Optional[float] = None):
@@ -303,28 +390,28 @@ class Trainer:
         Args:
             train_loader: Training data loader
             val_loader: Validation data loader
-            verbose: Print progress
+            verbose: Print progress (now uses logger)
         
         Returns:
             history: Training history dict
         """
         if verbose:
-            print("\n" + "="*70)
-            print("STARTING TRAINING")
-            print("="*70)
-            print(f"Device: {self.device}")
-            print(f"Optimizer: AdamW (lr={self.config.learning_rate}, wd={self.config.weight_decay})")
+            self.logger.info("="*70)
+            self.logger.info("STARTING TRAINING")
+            self.logger.info("="*70)
+            self.logger.info(f"Device: {self.device}")
+            self.logger.info(f"Optimizer: AdamW (lr={self.config.learning_rate}, wd={self.config.weight_decay})")
             if self.scheduler is not None:
-                print(f"Scheduler: {self.config.scheduler_type}")
+                self.logger.info(f"Scheduler: {self.config.scheduler_type}")
             else:
-                print("Scheduler: None")
+                self.logger.info("Scheduler: None")
             if self.use_wandb:
-                print(f"Wandb: Enabled ({wandb.run.name})")
+                self.logger.info(f"Wandb: Enabled ({wandb.run.name})")
             else:
-                print("Wandb: Disabled")
-            print(f"Max epochs: {self.config.epochs}")
-            print(f"Early stopping patience: {self.config.patience}")
-            print("="*70 + "\n")
+                self.logger.info("Wandb: Disabled")
+            self.logger.info(f"Max epochs: {self.config.epochs}")
+            self.logger.info(f"Early stopping patience: {self.config.patience}")
+            self.logger.info("="*70)
         
         for epoch in range(self.config.epochs):
             self.current_epoch = epoch
@@ -357,14 +444,16 @@ class Trainer:
                     'patience_counter': self.patience_counter
                 })
             
-            # Print progress
+            # Log progress
             if verbose:
-                print(f"Epoch {epoch+1:4d}/{self.config.epochs} | "
-                      f"Train Loss: {train_loss:.4f} | "
-                      f"Val Loss: {val_loss:.4f} | "
-                      f"Train MAE: {train_mae:.4f} | "
-                      f"Val MAE: {val_mae:.4f} | "
-                      f"LR: {current_lr:.2e}")
+                self.logger.info(
+                    f"Epoch {epoch+1:4d}/{self.config.epochs} | "
+                    f"Train Loss: {train_loss:.4f} | "
+                    f"Val Loss: {val_loss:.4f} | "
+                    f"Train MAE: {train_mae:.4f} | "
+                    f"Val MAE: {val_mae:.4f} | "
+                    f"LR: {current_lr:.2e}"
+                )
             
             # Learning rate scheduling
             self._step_scheduler(val_loss)
@@ -387,13 +476,13 @@ class Trainer:
                     wandb.run.summary['best_epoch'] = epoch + 1
                 
                 if verbose:
-                    print(f"  → New best model! Val loss: {val_loss:.4f}")
+                    self.logger.info(f"  → New best model! Val loss: {val_loss:.4f}")
             
             else:
                 self.patience_counter += 1
                 
                 if verbose and self.patience_counter > 0:
-                    print(f"  → No improvement for {self.patience_counter} epoch(s)")
+                    self.logger.info(f"  → No improvement for {self.patience_counter} epoch(s)")
             
             # Save periodic checkpoint
             if (epoch + 1) % self.config.save_interval == 0:
@@ -404,8 +493,8 @@ class Trainer:
             # Early stopping
             if self.patience_counter >= self.config.patience:
                 if verbose:
-                    print(f"\nEarly stopping triggered after {epoch+1} epochs")
-                    print(f"Best validation loss: {self.best_val_loss:.4f}")
+                    self.logger.info(f"Early stopping triggered after {epoch+1} epochs")
+                    self.logger.info(f"Best validation loss: {self.best_val_loss:.4f}")
                 break
         
         # Save final history
@@ -425,14 +514,14 @@ class Trainer:
             wandb.finish()
         
         if verbose:
-            print("\n" + "="*70)
-            print("TRAINING COMPLETED")
-            print("="*70)
-            print(f"Total epochs: {self.current_epoch + 1}")
-            print(f"Best val loss: {self.best_val_loss:.4f}")
-            print(f"Final train loss: {train_loss:.4f}")
-            print(f"Final val loss: {val_loss:.4f}")
-            print("="*70 + "\n")
+            self.logger.info("="*70)
+            self.logger.info("TRAINING COMPLETED")
+            self.logger.info("="*70)
+            self.logger.info(f"Total epochs: {self.current_epoch + 1}")
+            self.logger.info(f"Best val loss: {self.best_val_loss:.4f}")
+            self.logger.info(f"Final train loss: {train_loss:.4f}")
+            self.logger.info(f"Final val loss: {val_loss:.4f}")
+            self.logger.info("="*70)
         
         return self.history
     
@@ -486,8 +575,8 @@ class Trainer:
         self.patience_counter = checkpoint['patience_counter']
         self.history = checkpoint['history']
         
-        print(f"✓ Checkpoint loaded from epoch {self.current_epoch + 1}")
-        print(f"  Best val loss: {self.best_val_loss:.4f}")
+        self.logger.info(f"Checkpoint loaded from epoch {self.current_epoch + 1}")
+        self.logger.info(f"  Best val loss: {self.best_val_loss:.4f}")
     
     def save_history(self):
         """Save training history to JSON file."""
@@ -496,7 +585,7 @@ class Trainer:
         with open(history_path, 'w') as f:
             json.dump(self.history, f, indent=2)
         
-        print(f"✓ Training history saved: {history_path}")
+        self.logger.info(f"Training history saved: {history_path}")
 
 
 # ============================================================================

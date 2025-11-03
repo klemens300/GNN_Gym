@@ -16,14 +16,14 @@ class Config:
     # ============================================================
     # PATHS
     # ============================================================
-    csv_path: str = "database_navi.csv"
+    csv_path: str = "MoNbTaW.csv"
     checkpoint_dir: str = "checkpoints"
-    database_dir: str = "database"          # Directory for structure files
+    database_dir: str = "MoNbTaW"          # Directory for structure files
     
     # ============================================================
     # MATERIAL SYSTEM (Elements)
     # ============================================================
-    elements: List[str] = field(default_factory=lambda: ['Mo', 'Nb', 'Ta', 'W', 'Cr'])
+    elements: List[str] = field(default_factory=lambda: ['Mo', 'Nb', 'Ta', 'W'])
     
     # ============================================================
     # CRYSTAL STRUCTURE
@@ -41,11 +41,11 @@ class Config:
     # DATA
     # ============================================================
     batch_size: int = 32                 # Batch size for training
-    num_workers: int = 0                 # DataLoader workers (0 for debugging)
+    num_workers: int = 0                 # DataLoader
     
     # Data cleanup (barrier filtering)
     min_barrier: float = 0.1             # Minimum barrier (eV) - removes noise
-    max_barrier: float = 15.0            # Maximum barrier (eV) - removes slow diffusion
+    max_barrier: float = 5.0            # Maximum barrier (eV) - removes slow diffusion
     
     # Train/Val split
     val_split: float = 0.1               # Validation split ratio (10%)
@@ -60,8 +60,8 @@ class Config:
     gnn_embedding_dim: int = 64          # Output dimension of GNN encoder
     
     # MLP Predictor
-    mlp_hidden_dims: List[int] = field(default_factory=lambda: [512, 256, 128])
-    dropout: float = 0.15                # Dropout rate
+    mlp_hidden_dims: List[int] = field(default_factory=lambda: [1024, 512, 256])
+    dropout: float = 0.1                # Dropout rate
     
     # ============================================================
     # TRAINING
@@ -72,8 +72,8 @@ class Config:
     gradient_clip_norm: float = 1.0      # Max gradient norm
     
     # Training loop
-    epochs: int = 1000                   # Maximum number of epochs
-    patience: int = 50                   # Early stopping patience
+    epochs: int = 5000                   # Maximum number of epochs
+    patience: int = 30                   # Early stopping patience
     save_interval: int = 50              # Save checkpoint every N epochs
     
     # Learning rate scheduling
@@ -82,7 +82,7 @@ class Config:
     scheduler_factor: float = 0.5        # Reduce LR by this factor (plateau, step)
     scheduler_patience: int = 10         # Patience for LR reduction (plateau)
     scheduler_step_size: int = 100       # Step size for StepLR (step)
-    scheduler_t_max: int = 500           # T_max for CosineAnnealingLR (cosine)
+    scheduler_t_max: int = 250           # T_max for CosineAnnealingLR (cosine)
     scheduler_eta_min: float = 1e-6      # Minimum LR for CosineAnnealingLR (cosine)
     
     # ============================================================
@@ -106,14 +106,14 @@ class Config:
     # ACTIVE LEARNING
     # ============================================================
     # Initial data generation (Cycle 0)
-    al_initial_samples: int = 50              # Initial random samples before AL starts
+    al_initial_samples: int = 2500              # Initial random samples before AL starts
 
     # Test set generation
-    al_n_test: int = 10                      # Number of test compositions per cycle
+    al_n_test: int = 250                      # Number of test compositions per cycle
     al_test_strategy: str = 'uniform'         # Test generation strategy: 'uniform', ...
 
     # Query strategy
-    al_n_query: int = 10                      # Number of new training samples per cycle
+    al_n_query: int = 500                      # Number of new training samples per cycle
     al_query_strategy: str = 'error_weighted' # Query strategy: 'error_weighted', ...
 
     # Active learning loop
@@ -124,29 +124,45 @@ class Config:
     al_results_dir: str = "active_learning_results"  # Directory for AL results
     
     # ============================================================
+    # LOGGING (File Logging)
+    # ============================================================
+    log_dir: str = "logs"                        # Directory for log files
+    log_level: str = "INFO"                      # Logging level: DEBUG, INFO, WARNING, ERROR
+    log_to_console: bool = True                  # Also print to console
+    
+    # ============================================================
+    # LOSS FUNCTION
+    # ============================================================
+    loss_function: str = "mse"                   # Loss function: "mse", "mae", "huber", "smooth_l1"
+    
+    # ============================================================
     # LOGGING (Weights & Biases)
     # ============================================================
     use_wandb: bool = True                    # Enable/disable wandb
-    wandb_project: str = "diffusion-barrier"  # Wandb project name
+    wandb_project: str = "GNN_Gym_final_test_debug_1"  # Wandb project name
     wandb_entity: str = None                  # Wandb entity (username/team), None = default
     wandb_run_name: str = None                # Run name, None = auto-generated
     wandb_tags: List[str] = field(default_factory=list)  # Tags for the run
     wandb_notes: str = ""                     # Notes for the run
     wandb_log_interval: int = 1               # Log every N epochs
     wandb_watch_model: bool = True            # Watch model gradients
-    wandb_watch_freq: int = 100               # Watch frequency (batches)
+    wandb_watch_freq: int = 10               # Watch frequency (batches)
     
-    def get_model_name(self) -> str:
+    def get_model_name(self, n_samples: int = None, cycle: int = None) -> str:
         """
         Generate a descriptive model name based on configuration.
         
-        Format: {timestamp}-GNN-{layers}x{hidden}-MLP-{mlp_structure}-{scheduler}
+        Format: {timestamp}-samples{n}-cycle{c}-GNN-{layers}x{hidden}-MLP-{mlp_structure}-{scheduler}
+        
+        Args:
+            n_samples: Number of training samples (optional)
+            cycle: Active learning cycle number (optional)
         
         Returns:
             model_name: Descriptive model name
         
         Example:
-            "20241030-143522-GNN-5x64-MLP-1024-512-256-plateau"
+            "20241030-143522-samples2500-cycle0-GNN-5x64-MLP-1024-512-256-cosine"
         """
         # Timestamp first for easy sorting
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -158,28 +174,43 @@ class Config:
         scheduler = self.scheduler_type if self.use_scheduler else "none"
         
         # Build name (timestamp first!)
-        model_name = (
-            f"{timestamp}-"
-            f"GNN-{self.gnn_num_layers}x{self.gnn_hidden_dim}-"
-            f"MLP-{mlp_str}-"
-            f"{scheduler}"
-        )
+        parts = [timestamp]
+        
+        # Add sample size if provided
+        if n_samples is not None:
+            parts.append(f"samples{n_samples}")
+        
+        # Add cycle if provided
+        if cycle is not None:
+            parts.append(f"cycle{cycle}")
+        
+        # Add architecture info
+        parts.append(f"GNN-{self.gnn_num_layers}x{self.gnn_hidden_dim}")
+        parts.append(f"MLP-{mlp_str}")
+        parts.append(scheduler)
+        
+        model_name = "-".join(parts)
         
         return model_name
     
-    def get_experiment_name(self) -> str:
+    def get_experiment_name(self, cycle: int = None) -> str:
         """
-        Generate experiment name for wandb with timestamp.
+        Generate experiment name for wandb with timestamp and cycle.
         
-        Format: {date}-{time}-GNN
+        Format: {date}-{time}-cycle{c}-GNN
+        
+        Args:
+            cycle: Active learning cycle number (optional)
         
         Returns:
             experiment_name: Simple experiment name with timestamp
         
         Example:
-            "20241030-143522-GNN"
+            "20241030-143522-cycle0-GNN"
         """
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        if cycle is not None:
+            return f"{timestamp}-cycle{cycle}-GNN"
         return f"{timestamp}-GNN"
 
 
