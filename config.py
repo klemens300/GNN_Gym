@@ -44,8 +44,8 @@ class Config:
     num_workers: int = 0                 # DataLoader
     
     # Data cleanup (barrier filtering)
-    min_barrier: float = 0.1             # Minimum barrier (eV) - removes noise
-    max_barrier: float = 5.0            # Maximum barrier (eV) - removes slow diffusion
+    min_barrier: float = 0.1             # Minimum barrier (eV)
+    max_barrier: float = 5.0            # Maximum barrier (eV)
     
     # Train/Val split
     val_split: float = 0.1               # Validation split ratio (10%)
@@ -78,7 +78,7 @@ class Config:
     
     # Learning rate scheduling
     use_scheduler: bool = True           # Use learning rate scheduler
-    scheduler_type: str = "cosine"      # Scheduler type: "plateau", "cosine", "step", or "none"
+    scheduler_type: str = "cosine"      # Scheduler type: "plateau", "cosine", "step", or "none" ONLY COSINE TESTED
     scheduler_factor: float = 0.5        # Reduce LR by this factor (plateau, step)
     scheduler_patience: int = 10         # Patience for LR reduction (plateau)
     scheduler_step_size: int = 100       # Step size for StepLR (step)
@@ -88,7 +88,7 @@ class Config:
     # ============================================================
     # NEB (Nudged Elastic Band) PARAMETERS
     # ============================================================
-    neb_n_images: int = 3
+    neb_n_images: int = 3                  #ARTIFACT - WILL BE DELETED
     neb_images: int = 3                # Number of images in NEB path
     neb_spring_constant: float = 5.0     # Spring constant for NEB (eV/Angstrom^2)
     neb_fmax: float = 0.05               # Force convergence criterion (eV/Angstrom)
@@ -139,7 +139,7 @@ class Config:
     # LOGGING (Weights & Biases)
     # ============================================================
     use_wandb: bool = True                    # Enable/disable wandb
-    wandb_project: str = "GNN_Gym_final_test_debug_1"  # Wandb project name
+    wandb_project: str = "GNN_Gym_final_test_debug_2"  # Wandb project name
     wandb_entity: str = None                  # Wandb entity (username/team), None = default
     wandb_run_name: str = None                # Run name, None = auto-generated
     wandb_tags: List[str] = field(default_factory=list)  # Tags for the run

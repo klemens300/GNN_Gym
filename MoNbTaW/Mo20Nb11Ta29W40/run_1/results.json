@@ -1,0 +1,30 @@
+{
+  "composition": {
+    "Mo": 0.1983388123322908,
+    "Nb": 0.10716438621803401,
+    "Ta": 0.2918543539831329,
+    "W": 0.4026424474665422
+  },
+  "composition_string": "Mo20Nb11Ta29W40",
+  "run_number": 1,
+  "calculator": "CHGNet",
+  "model": "CHGNet-pretrained",
+  "diffusing_element": "Ta",
+  "E_initial_eV": -1515.9998779296875,
+  "E_final_eV": -1516.03076171875,
+  "forward_barrier_eV": 0.314208984375,
+  "backward_barrier_eV": 0.3450927734375,
+  "neb_energies_eV": [
+    -1515.9998779296875,
+    -1515.6856689453125,
+    -1516.03076171875
+  ],
+  "neb_converged": true,
+  "timing": {
+    "initial_relax_s": 2.185040235519409,
+    "final_relax_s": 1.7615203857421875,
+    "neb_s": 1.2238240242004395,
+    "total_s": 5.592343091964722
+  },
+  "timestamp": "2025-11-03 23:24:29"
+}
