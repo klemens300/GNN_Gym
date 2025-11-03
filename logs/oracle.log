@@ -482,3 +482,81 @@
 2025-11-03 23:28:30 | INFO     |   Backward barrier: 0.548 eV
 2025-11-03 23:28:30 | INFO     |   Timing: relax=0.8s, neb=2.6s
 2025-11-03 23:28:30 | INFO     | Calculating Mo47Nb25Ta18W10 (run 1)...
+2025-11-03 23:29:02 | INFO     | ✓ Completed in 31.7s
+2025-11-03 23:29:02 | INFO     |   Diffusing element: Mo
+2025-11-03 23:29:02 | INFO     |   Forward barrier: 0.501 eV
+2025-11-03 23:29:02 | INFO     |   Backward barrier: 0.572 eV
+2025-11-03 23:29:02 | INFO     |   Timing: relax=2.1s, neb=29.1s
+2025-11-03 23:29:02 | INFO     | Calculating Mo6Nb2Ta68W24 (run 1)...
+2025-11-03 23:29:08 | INFO     | ✓ Completed in 6.0s
+2025-11-03 23:29:08 | INFO     |   Diffusing element: W
+2025-11-03 23:29:08 | INFO     |   Forward barrier: 0.420 eV
+2025-11-03 23:29:08 | INFO     |   Backward barrier: 0.698 eV
+2025-11-03 23:29:08 | INFO     |   Timing: relax=3.3s, neb=2.1s
+2025-11-03 23:29:08 | INFO     | Calculating Mo64Nb21Ta15W1 (run 1)...
+2025-11-03 23:29:15 | INFO     | ✓ Completed in 6.5s
+2025-11-03 23:29:15 | INFO     |   Diffusing element: Ta
+2025-11-03 23:29:15 | INFO     |   Forward barrier: 0.540 eV
+2025-11-03 23:29:15 | INFO     |   Backward barrier: 0.145 eV
+2025-11-03 23:29:15 | INFO     |   Timing: relax=3.2s, neb=2.7s
+2025-11-03 23:29:15 | INFO     | Calculating Mo19Nb35Ta42W5 (run 1)...
+2025-11-03 23:29:20 | INFO     | ✓ Completed in 5.5s
+2025-11-03 23:29:20 | INFO     |   Diffusing element: Mo
+2025-11-03 23:29:20 | INFO     |   Forward barrier: 0.610 eV
+2025-11-03 23:29:20 | INFO     |   Backward barrier: 0.627 eV
+2025-11-03 23:29:20 | INFO     |   Timing: relax=3.3s, neb=1.7s
+2025-11-03 23:29:20 | INFO     | Calculating Mo17Nb26Ta55W1 (run 1)...
+2025-11-03 23:29:27 | INFO     | ✓ Completed in 6.5s
+2025-11-03 23:29:27 | INFO     |   Diffusing element: Ta
+2025-11-03 23:29:27 | INFO     |   Forward barrier: 0.386 eV
+2025-11-03 23:29:27 | INFO     |   Backward barrier: 0.427 eV
+2025-11-03 23:29:27 | INFO     |   Timing: relax=4.6s, neb=1.5s
+2025-11-03 23:29:27 | INFO     | Calculating Mo15Nb1Ta81W4 (run 1)...
+2025-11-03 23:29:32 | INFO     | ✓ Completed in 5.7s
+2025-11-03 23:29:32 | INFO     |   Diffusing element: Ta
+2025-11-03 23:29:32 | INFO     |   Forward barrier: 0.559 eV
+2025-11-03 23:29:32 | INFO     |   Backward barrier: 0.688 eV
+2025-11-03 23:29:32 | INFO     |   Timing: relax=3.8s, neb=2.6s
+2025-11-03 23:29:32 | INFO     | Calculating Mo55Nb17Ta22W6 (run 1)...
+2025-11-03 23:29:39 | INFO     | ✓ Completed in 6.8s
+2025-11-03 23:29:39 | INFO     |   Diffusing element: Ta
+2025-11-03 23:29:39 | INFO     |   Forward barrier: 0.375 eV
+2025-11-03 23:29:39 | INFO     |   Backward barrier: 0.251 eV
+2025-11-03 23:29:39 | INFO     |   Timing: relax=3.2s, neb=3.1s
+2025-11-03 23:29:39 | INFO     | Calculating Mo41Nb16Ta3W40 (run 1)...
+2025-11-03 23:29:43 | INFO     | ✓ Completed in 4.2s
+2025-11-03 23:29:43 | INFO     |   Diffusing element: Mo
+2025-11-03 23:29:43 | INFO     |   Forward barrier: 0.677 eV
+2025-11-03 23:29:43 | INFO     |   Backward barrier: 0.723 eV
+2025-11-03 23:29:43 | INFO     |   Timing: relax=2.4s, neb=1.3s
+2025-11-03 23:29:43 | INFO     | Calculating Mo11Nb20Ta43W26 (run 1)...
+2025-11-03 23:29:48 | INFO     | ✓ Completed in 5.1s
+2025-11-03 23:29:48 | INFO     |   Diffusing element: Ta
+2025-11-03 23:29:48 | INFO     |   Forward barrier: 0.552 eV
+2025-11-03 23:29:48 | INFO     |   Backward barrier: 0.583 eV
+2025-11-03 23:29:48 | INFO     |   Timing: relax=3.1s, neb=1.6s
+2025-11-03 23:29:48 | INFO     | Calculating Mo74Nb8Ta10W8 (run 1)...
+2025-11-03 23:29:54 | INFO     | ✓ Completed in 5.8s
+2025-11-03 23:29:54 | INFO     |   Diffusing element: Mo
+2025-11-03 23:29:54 | INFO     |   Forward barrier: 0.520 eV
+2025-11-03 23:29:54 | INFO     |   Backward barrier: 0.489 eV
+2025-11-03 23:29:54 | INFO     |   Timing: relax=2.2s, neb=3.0s
+2025-11-03 23:29:54 | INFO     | Calculating Mo26Nb13Ta54W8 (run 1)...
+2025-11-03 23:29:59 | INFO     | ✓ Completed in 5.0s
+2025-11-03 23:29:59 | INFO     |   Diffusing element: Ta
+2025-11-03 23:29:59 | INFO     |   Forward barrier: 0.350 eV
+2025-11-03 23:29:59 | INFO     |   Backward barrier: 0.293 eV
+2025-11-03 23:29:59 | INFO     |   Timing: relax=3.5s, neb=1.1s
+2025-11-03 23:29:59 | INFO     | Calculating Mo22Nb16Ta28W34 (run 1)...
+2025-11-03 23:30:02 | INFO     | ✓ Completed in 3.1s
+2025-11-03 23:30:02 | INFO     |   Diffusing element: Mo
+2025-11-03 23:30:02 | INFO     |   Forward barrier: 0.532 eV
+2025-11-03 23:30:02 | INFO     |   Backward barrier: 0.496 eV
+2025-11-03 23:30:02 | INFO     |   Timing: relax=1.6s, neb=1.1s
+2025-11-03 23:30:02 | INFO     | Calculating Mo15Nb43Ta39W3 (run 1)...
+2025-11-03 23:30:08 | INFO     | ✓ Completed in 6.0s
+2025-11-03 23:30:08 | INFO     |   Diffusing element: Nb
+2025-11-03 23:30:08 | INFO     |   Forward barrier: 0.186 eV
+2025-11-03 23:30:08 | INFO     |   Backward barrier: 0.299 eV
+2025-11-03 23:30:08 | INFO     |   Timing: relax=3.1s, neb=2.6s
+2025-11-03 23:30:08 | INFO     | Calculating Mo4Nb49Ta25W22 (run 1)...
