@@ -72,12 +72,12 @@ class Config:
     gradient_clip_norm: float = 1.0      # Max gradient norm
     
     # Training loop
-    epochs: int = 5000                   # Maximum number of epochs
-    patience: int = 5                   # Early stopping patience (epochs)
+    epochs: int = 10000                   # Maximum number of epochs
+    patience: int = 100                   # Early stopping patience (epochs)
     save_interval: int = 50              # Save checkpoint every N epochs
     
     # Final model training (after convergence or max cycles)
-    final_model_patience: int = 100      # Higher patience for final model
+    final_model_patience: int = 666      # Higher patience for final model
     
     # Learning rate scheduling
     use_scheduler: bool = True           # Use learning rate scheduler
@@ -96,7 +96,6 @@ class Config:
     # ============================================================
     # NEB (Nudged Elastic Band) PARAMETERS
     # ============================================================
-    neb_n_images: int = 3                  #ARTIFACT - WILL BE DELETED
     neb_images: int = 3                # Number of images in NEB path
     neb_spring_constant: float = 5.0     # Spring constant for NEB (eV/Angstrom^2)
     neb_fmax: float = 0.1               # Force convergence criterion (eV/Angstrom)
@@ -114,26 +113,26 @@ class Config:
     # ACTIVE LEARNING
     # ============================================================
     # Initial data generation (Cycle 0)
-    al_initial_samples: int = 10              # Initial random samples before AL starts
+    al_initial_samples: int = 1000              # Initial random samples before AL starts
 
     # Test set generation
-    al_n_test: int = 10                      # Number of test compositions per cycle
+    al_n_test: int = 500                      # Number of test compositions per cycle
     al_test_strategy: str = 'uniform'         # Test generation strategy: 'uniform', ...
 
     # Query strategy
-    al_n_query: int = 10                      # Number of new training samples per cycle
+    al_n_query: int = 250                      # Number of new training samples per cycle
     al_query_strategy: str = 'error_weighted' # Query strategy: 'error_weighted', ...
 
     # Active learning loop
-    al_max_cycles: int = 2                  # Maximum number of AL cycles
+    al_max_cycles: int = 20                  # Maximum number of AL cycles
     al_seed: int = 42                         # Random seed for AL (gets incremented per cycle)
 
     # Convergence criteria
     al_convergence_check: bool = True                    # Enable convergence checking
     al_convergence_metric: str = "mae"                   # Metric: "mae" or "rel_mae"
-    al_convergence_threshold_mae: float = 0.1           # MAE threshold (eV)
-    al_convergence_threshold_rel_mae: float = 0.10       # Relative MAE threshold (10%)
-    al_convergence_patience: int = 2                     # Cycles without improvement before stopping
+    al_convergence_threshold_mae: float = 0.01           # MAE threshold (eV)
+    al_convergence_threshold_rel_mae: float = 0.1       # Relative MAE threshold (10%)
+    al_convergence_patience: int = 5                     # Cycles without improvement before stopping
 
     # Output
     al_results_dir: str = "active_learning_results"  # Directory for AL results
@@ -154,11 +153,11 @@ class Config:
     # LOGGING (Weights & Biases)
     # ============================================================
     use_wandb: bool = True                    # Enable/disable wandb
-    wandb_project: str = "GNN_Gym_final_test_debug_4"  # Wandb project name
+    wandb_project: str = "GNN_Gym_MoNbTaW"  # Wandb project name
     wandb_entity: str = None                  # Wandb entity (username/team), None = default
     wandb_run_name: str = None                # Run name, None = auto-generated
     wandb_tags: List[str] = field(default_factory=list)  # Tags for the run
-    wandb_notes: str = ""                     # Notes for the run
+    wandb_notes: str = "First full test to check if convergence is possible"                     # Notes for the run
     wandb_log_interval: int = 1               # Log every N epochs
     wandb_watch_model: bool = True            # Watch model gradients
     wandb_watch_freq: int = 10               # Watch frequency (batches)
