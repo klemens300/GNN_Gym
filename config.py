@@ -73,7 +73,7 @@ class Config:
     
     # Training loop
     epochs: int = 5000                   # Maximum number of epochs
-    patience: int = 30                   # Early stopping patience
+    patience: int = 50                   # Early stopping patience
     save_interval: int = 50              # Save checkpoint every N epochs
     
     # Learning rate scheduling
@@ -82,7 +82,7 @@ class Config:
     scheduler_factor: float = 0.5        # Reduce LR by this factor (plateau, step)
     scheduler_patience: int = 10         # Patience for LR reduction (plateau)
     scheduler_step_size: int = 100       # Step size for StepLR (step)
-    scheduler_t_max: int = 250           # T_max for CosineAnnealingLR (cosine)
+    scheduler_t_max: int = 100           # T_max for CosineAnnealingLR (cosine)
     scheduler_eta_min: float = 1e-6      # Minimum LR for CosineAnnealingLR (cosine)
     
     # ============================================================
@@ -91,7 +91,7 @@ class Config:
     neb_n_images: int = 3                  #ARTIFACT - WILL BE DELETED
     neb_images: int = 3                # Number of images in NEB path
     neb_spring_constant: float = 5.0     # Spring constant for NEB (eV/Angstrom^2)
-    neb_fmax: float = 0.05               # Force convergence criterion (eV/Angstrom)
+    neb_fmax: float = 0.1               # Force convergence criterion (eV/Angstrom)
     neb_max_steps: int = 500             # Maximum optimization steps
     neb_climb: bool = True               # Use climbing image NEB
     neb_method: str = "aseneb"           # NEB method: "aseneb" or "dynneb"
@@ -106,14 +106,14 @@ class Config:
     # ACTIVE LEARNING
     # ============================================================
     # Initial data generation (Cycle 0)
-    al_initial_samples: int = 2500              # Initial random samples before AL starts
+    al_initial_samples: int = 1000              # Initial random samples before AL starts
 
     # Test set generation
-    al_n_test: int = 250                      # Number of test compositions per cycle
+    al_n_test: int = 500                      # Number of test compositions per cycle
     al_test_strategy: str = 'uniform'         # Test generation strategy: 'uniform', ...
 
     # Query strategy
-    al_n_query: int = 500                      # Number of new training samples per cycle
+    al_n_query: int = 1000                      # Number of new training samples per cycle
     al_query_strategy: str = 'error_weighted' # Query strategy: 'error_weighted', ...
 
     # Active learning loop
@@ -139,7 +139,7 @@ class Config:
     # LOGGING (Weights & Biases)
     # ============================================================
     use_wandb: bool = True                    # Enable/disable wandb
-    wandb_project: str = "GNN_Gym_final_test_debug_2"  # Wandb project name
+    wandb_project: str = "GNN_Gym_final_test_debug_3"  # Wandb project name
     wandb_entity: str = None                  # Wandb entity (username/team), None = default
     wandb_run_name: str = None                # Run name, None = auto-generated
     wandb_tags: List[str] = field(default_factory=list)  # Tags for the run
