@@ -73,7 +73,7 @@ class Config:
     
     # Training loop
     epochs: int = 5000                   # Maximum number of epochs
-    patience: int = 50                   # Early stopping patience (epochs)
+    patience: int = 5                   # Early stopping patience (epochs)
     save_interval: int = 50              # Save checkpoint every N epochs
     
     # Final model training (after convergence or max cycles)
@@ -114,18 +114,18 @@ class Config:
     # ACTIVE LEARNING
     # ============================================================
     # Initial data generation (Cycle 0)
-    al_initial_samples: int = 1000              # Initial random samples before AL starts
+    al_initial_samples: int = 10              # Initial random samples before AL starts
 
     # Test set generation
-    al_n_test: int = 500                      # Number of test compositions per cycle
+    al_n_test: int = 10                      # Number of test compositions per cycle
     al_test_strategy: str = 'uniform'         # Test generation strategy: 'uniform', ...
 
     # Query strategy
-    al_n_query: int = 1000                      # Number of new training samples per cycle
+    al_n_query: int = 10                      # Number of new training samples per cycle
     al_query_strategy: str = 'error_weighted' # Query strategy: 'error_weighted', ...
 
     # Active learning loop
-    al_max_cycles: int = 10                   # Maximum number of AL cycles
+    al_max_cycles: int = 2                  # Maximum number of AL cycles
     al_seed: int = 42                         # Random seed for AL (gets incremented per cycle)
 
     # Convergence criteria

@@ -109,17 +109,18 @@ class CosineAnnealingWarmRestarts(torch.optim.lr_scheduler._LRScheduler):
         self.T_i = T_0
         self.restart_count = 0
         
-        # Store initial max LR for each param group
-        self.base_lrs_initial = None
+        # CRITICAL: Store initial LRs BEFORE calling super().__init__
+        # because super().__init__ calls step() which calls get_lr()
+        self.base_lrs_initial = [group['lr'] for group in optimizer.param_groups]
         
         super().__init__(optimizer, last_epoch)
-        
-        # Save true initial LRs after parent init
-        if self.base_lrs_initial is None:
-            self.base_lrs_initial = [group['lr'] for group in self.optimizer.param_groups]
     
     def get_lr(self):
         """Calculate current learning rate."""
+        # Safety check
+        if self.base_lrs_initial is None:
+            return self.base_lrs
+        
         # Calculate cosine position in current period
         if self.T_cur == -1:
             # First call, return base_lrs
