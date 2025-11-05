@@ -6,6 +6,7 @@ Handles:
 - Oracle-based test data generation
 - Model predictions
 - Error-based query strategy
+- Convergence checking for Active Learning
 - GPU memory cleanup
 
 Usage:
@@ -25,7 +26,7 @@ import torch
 import gc
 import logging
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from tqdm import tqdm
 
 from config import Config
@@ -101,182 +102,100 @@ def setup_inference_logger(cycle: int, config: Config):
 
 def generate_test_compositions(
     elements: List[str],
-    n_test: int,
+    n_test: int = 100,
     strategy: str = 'uniform',
     seed: int = 42
 ) -> List[dict]:
     """
-    Generate test compositions using different strategies.
+    Generate test compositions for prediction.
     
     Args:
-        elements: List of elements (e.g., ['Mo', 'Nb', 'O', 'Ta', 'W'])
-        n_test: Number of test compositions to generate
-        strategy: Generation strategy ('uniform', ...)
-        seed: Random seed for reproducibility
-    
-    Returns:
-        List of composition dicts: [{'Mo': 0.2, 'Nb': 0.3, ...}, ...]
-    
-    Strategies:
-        - 'uniform': Uniform grid over composition simplex
-        - (future: 'random', 'boundary', 'adaptive', ...)
-    
-    Example:
-        >>> comps = generate_test_compositions(['Mo', 'Nb', 'O'], n_test=10)
-        >>> print(comps[0])
-        {'Mo': 0.333, 'Nb': 0.333, 'O': 0.334}
-    """
-    if strategy == 'uniform':
-        return uniform_grid_sampling(elements, n_test, seed)
-    else:
-        raise ValueError(f"Unknown test generation strategy: {strategy}")
-
-
-def uniform_grid_sampling(
-    elements: List[str],
-    n_test: int,
-    seed: int = 42
-) -> List[dict]:
-    """
-    Generate uniform grid over composition simplex.
-    
-    Uses Dirichlet sampling to create uniform coverage.
-    Grid density is automatically determined from n_test.
-    
-    Args:
-        elements: List of elements
-        n_test: Number of test points
+        elements: List of element symbols
+        n_test: Number of test compositions
+        strategy: Sampling strategy ('uniform')
         seed: Random seed
     
     Returns:
-        List of composition dicts
+        compositions: List of composition dicts {element: fraction}
+    
+    Example:
+        >>> comps = generate_test_compositions(['Mo', 'W'], n_test=10)
+        >>> print(comps[0])
+        {'Mo': 0.234, 'W': 0.766}
     """
     np.random.seed(seed)
-    n_elements = len(elements)
     
-    # Use Dirichlet distribution for uniform simplex sampling
-    # Alpha = 1 gives uniform distribution over simplex
-    alpha = np.ones(n_elements)
-    samples = np.random.dirichlet(alpha, size=n_test)
-    
-    # Convert to list of dicts
-    compositions = []
-    for sample in samples:
-        # Ensure positive and sum to 1
-        sample = np.clip(sample, 0.0, 1.0)
-        sample = sample / sample.sum()
+    if strategy == 'uniform':
+        # Uniform sampling on simplex using Dirichlet
+        alpha = np.ones(len(elements))
+        fractions = np.random.dirichlet(alpha, size=n_test)
         
-        comp = {elem: float(frac) for elem, frac in zip(elements, sample)}
-        compositions.append(comp)
+        compositions = []
+        for frac in fractions:
+            comp = {elem: float(f) for elem, f in zip(elements, frac)}
+            compositions.append(comp)
+        
+        return compositions
     
-    # Ensure equimolar composition is included (good reference point)
-    if n_test >= 1:
-        equimolar = {elem: 1.0 / n_elements for elem in elements}
-        compositions[0] = equimolar
-    
-    return compositions
+    else:
+        raise ValueError(f"Unknown strategy: {strategy}")
 
 
 # ============================================================================
-# 2. ORACLE TEST DATA GENERATION
+# 2. ORACLE-BASED TEST DATA GENERATION
 # ============================================================================
 
 def generate_test_data_with_oracle(
     compositions: List[dict],
     oracle: Oracle,
     config: Config,
-    logger: logging.Logger = None,
-    verbose: bool = True
+    verbose: bool = False
 ) -> pd.DataFrame:
     """
-    Generate test data using Oracle (ground truth barriers).
-    
-    For each composition:
-    1. Call oracle.calculate() to get real barrier
-    2. Store results
-    3. Clean GPU memory at the end
+    Generate test data using Oracle (NEB calculations).
     
     Args:
         compositions: List of composition dicts
         oracle: Oracle instance
         config: Config object
-        logger: Logger instance (optional)
         verbose: Print progress
     
     Returns:
-        DataFrame with columns:
-        - composition (str): Formatted composition string
-        - oracle_barrier (float): Ground truth barrier (eV)
-        - structure_folder (str): Path to structures
-        - success (bool): Whether calculation succeeded
+        test_data: DataFrame with columns:
+            - composition_string
+            - structure_folder
+            - oracle_barrier
     
     Example:
-        >>> test_data = generate_test_data_with_oracle(comps, oracle, config)
-        >>> print(test_data.head())
+        >>> test_data = generate_test_data_with_oracle(
+        ...     compositions=[{'Mo': 0.5, 'W': 0.5}],
+        ...     oracle=oracle,
+        ...     config=config
+        ... )
     """
-    if verbose and logger:
-        logger.info("="*70)
-        logger.info("GENERATING TEST DATA WITH ORACLE")
-        logger.info("="*70)
-        logger.info(f"Test compositions: {len(compositions)}")
-    
     results = []
     
-    iterator = tqdm(compositions, desc="Oracle calculations", disable=not verbose)
+    iterator = tqdm(compositions, desc="Generating test data") if verbose else compositions
     
-    for idx, comp in enumerate(iterator):
-        # Format composition string
-        comp_str = composition_to_string(comp)
+    for comp in iterator:
+        # Run Oracle calculation
+        success = oracle.calculate(comp)
         
-        try:
-            # Oracle calculation
-            success = oracle.calculate(comp)
-            
-            if success:
-                # Get barrier from last entry in CSV
-                df = pd.read_csv(config.csv_path)
-                last_row = df.iloc[-1]
-                
-                results.append({
-                    'composition': comp_str,
-                    'oracle_barrier': last_row['backward_barrier_eV'],
-                    'structure_folder': last_row['structure_folder'],
-                    'success': True
-                })
-            else:
-                results.append({
-                    'composition': comp_str,
-                    'oracle_barrier': np.nan,
-                    'structure_folder': None,
-                    'success': False
-                })
-                
-        except Exception as e:
-            if verbose and logger:
-                logger.error(f"Error for {comp_str}: {e}")
+        if success:
+            # Read last entry from CSV
+            df = pd.read_csv(config.csv_path)
+            last_entry = df.iloc[-1]
             
             results.append({
-                'composition': comp_str,
-                'oracle_barrier': np.nan,
-                'structure_folder': None,
-                'success': False
+                'composition_string': last_entry['composition_string'],
+                'structure_folder': last_entry['structure_folder'],
+                'oracle_barrier': last_entry['backward_barrier_eV']
             })
     
-    # Cleanup GPU once at the end (not after each calculation)
+    # Cleanup after Oracle operations
     cleanup_gpu()
     
-    df = pd.DataFrame(results)
-    
-    if verbose and logger:
-        success_rate = df['success'].sum() / len(df) * 100
-        logger.info(f"✓ Test data generated")
-        logger.info(f"  Success rate: {success_rate:.1f}% ({df['success'].sum()}/{len(df)})")
-        if df['success'].any():
-            successful = df[df['success']]
-            logger.info(f"  Barrier range: [{successful['oracle_barrier'].min():.3f}, "
-                  f"{successful['oracle_barrier'].max():.3f}] eV")
-    
-    return df
+    return pd.DataFrame(results)
 
 
 # ============================================================================
@@ -287,350 +206,257 @@ def predict_barriers_for_test_set(
     model_path: str,
     test_data: pd.DataFrame,
     config: Config,
-    logger: logging.Logger = None,
-    verbose: bool = True
+    verbose: bool = False
 ) -> pd.DataFrame:
     """
-    Make barrier predictions for test set.
+    Predict barriers for test set using trained model.
     
     Args:
         model_path: Path to trained model checkpoint
-        test_data: DataFrame from generate_test_data_with_oracle()
+        test_data: DataFrame with structure_folder and oracle_barrier columns
         config: Config object
-        logger: Logger instance (optional)
         verbose: Print progress
     
     Returns:
-        DataFrame with added columns:
-        - predicted_barrier (float): Model prediction (eV)
-        - relative_error (float): |pred - oracle| / oracle
-        - absolute_error (float): |pred - oracle|
+        predictions: DataFrame with additional columns:
+            - predicted_barrier
+            - absolute_error
+            - relative_error
     
     Example:
         >>> predictions = predict_barriers_for_test_set(
-        ...     'checkpoints/best_model.pt', test_data, config
+        ...     'checkpoints/best_model.pt',
+        ...     test_data,
+        ...     config
         ... )
     """
-    if verbose and logger:
-        logger.info("="*70)
-        logger.info("MODEL PREDICTIONS")
-        logger.info("="*70)
-        logger.info(f"Model: {model_path}")
-        logger.info(f"Test samples: {len(test_data)}")
-    
     # Load model
-    model, checkpoint = load_model_for_inference(model_path, config, validate=False)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = model.to(device)
+    model, checkpoint = load_model_for_inference(model_path, config)
     model.eval()
     
-    # Initialize builder for graph construction
-    builder = TemplateGraphBuilder(config)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = model.to(device)
     
-    # Filter only successful oracle calculations
-    test_data_filtered = test_data[test_data['success']].copy()
-    
-    if len(test_data_filtered) == 0:
-        if verbose:
-            if logger: logger.info(f"\n⚠️  No successful oracle calculations to predict!")
-        return pd.DataFrame(columns=[
-            'composition', 'oracle_barrier', 'predicted_barrier',
-            'absolute_error', 'relative_error', 'structure_folder'
-        ])
+    # Build graph builder
+    builder = TemplateGraphBuilder(config, csv_path=config.csv_path)
     
     predictions = []
     
-    iterator = tqdm(test_data_filtered.iterrows(), 
-                   total=len(test_data_filtered),
-                   desc="Predictions") if verbose else test_data_filtered.iterrows()
+    iterator = tqdm(test_data.iterrows(), total=len(test_data), 
+                   desc="Predicting barriers") if verbose else test_data.iterrows()
     
     for idx, row in iterator:
-        try:
-            # Get structure paths
-            structure_folder = Path(row['structure_folder'])
-            initial_cif = structure_folder / "initial_relaxed.cif"
-            final_cif = structure_folder / "final_relaxed.cif"
-            
-            # Check if files exist
-            if not initial_cif.exists() or not final_cif.exists():
-                if verbose:
-                    if logger: logger.info(f"\n  Structures not found for {row['composition']}")
-                predictions.append({
-                    'composition': row['composition'],
-                    'oracle_barrier': row['oracle_barrier'],
-                    'predicted_barrier': np.nan,
-                    'absolute_error': np.nan,
-                    'relative_error': np.nan,
-                    'structure_folder': row['structure_folder']
-                })
-                continue
-            
-            # Build graphs
-            initial_graph, final_graph = builder.build_pair_graph(
-                str(initial_cif),
-                str(final_cif),
-                backward_barrier=0.0  # Dummy value
-            )
-            
-            # Move to device
+        structure_folder = Path(row['structure_folder'])
+        oracle_barrier = row['oracle_barrier']
+        
+        # Build graphs
+        initial_cif = structure_folder / "initial_relaxed.cif"
+        final_cif = structure_folder / "final_relaxed.cif"
+        
+        initial_graph, final_graph = builder.build_pair_graph(
+            str(initial_cif),
+            str(final_cif),
+            backward_barrier=oracle_barrier
+        )
+        
+        # Move to device
+        initial_graph = initial_graph.to(device)
+        final_graph = final_graph.to(device)
+        
+        # Predict
+        with torch.no_grad():
             from torch_geometric.data import Batch
-            initial_batch = Batch.from_data_list([initial_graph]).to(device)
-            final_batch = Batch.from_data_list([final_graph]).to(device)
+            initial_batch = Batch.from_data_list([initial_graph])
+            final_batch = Batch.from_data_list([final_graph])
             
-            # Predict
-            with torch.no_grad():
-                prediction = model(initial_batch, final_batch)
-            
+            prediction = model(initial_batch, final_batch)
             predicted_barrier = prediction.item()
-            
-            # Calculate errors
-            oracle_barrier = row['oracle_barrier']
-            absolute_error = abs(predicted_barrier - oracle_barrier)
-            relative_error = absolute_error / oracle_barrier if oracle_barrier != 0 else np.inf
-            
-            predictions.append({
-                'composition': row['composition'],
-                'oracle_barrier': oracle_barrier,
-                'predicted_barrier': predicted_barrier,
-                'absolute_error': absolute_error,
-                'relative_error': relative_error,
-                'structure_folder': row['structure_folder']
-            })
-            
-        except Exception as e:
-            if verbose:
-                if logger: logger.info(f"\n  Prediction error for {row['composition']}: {e}")
-            
-            predictions.append({
-                'composition': row['composition'],
-                'oracle_barrier': row['oracle_barrier'],
-                'predicted_barrier': np.nan,
-                'absolute_error': np.nan,
-                'relative_error': np.nan,
-                'structure_folder': row['structure_folder']
-            })
+        
+        # Calculate errors
+        abs_error = abs(predicted_barrier - oracle_barrier)
+        rel_error = abs_error / (oracle_barrier + 1e-8)
+        
+        predictions.append({
+            'composition': row['composition_string'],
+            'structure_folder': str(structure_folder),
+            'oracle_barrier': oracle_barrier,
+            'predicted_barrier': predicted_barrier,
+            'absolute_error': abs_error,
+            'relative_error': rel_error
+        })
     
-    # Clean GPU after all predictions
+    # Cleanup after predictions
     cleanup_gpu()
     
-    df = pd.DataFrame(predictions)
-    
-    if verbose:
-        # Safe check for valid predictions
-        if 'predicted_barrier' in df.columns and len(df) > 0:
-            valid = df.dropna(subset=['predicted_barrier'])
-        else:
-            valid = pd.DataFrame()
-        
-        if logger: logger.info(f"\n✓ Predictions completed")
-        if logger: logger.info(f"  Valid predictions: {len(valid)}/{len(df)}")
-        if len(valid) > 0:
-            if logger: logger.info(f"  Mean absolute error: {valid['absolute_error'].mean():.3f} eV")
-            if logger: logger.info(f"  Mean relative error: {valid['relative_error'].mean():.3f}")
-            if logger: logger.info(f"  Median relative error: {valid['relative_error'].median():.3f}")
-        else:
-            if logger: logger.info(f"  ⚠️  No valid predictions generated!")
-    
-    return df
+    return pd.DataFrame(predictions)
 
 
 # ============================================================================
-# 4. ERROR-WEIGHTED QUERY STRATEGY
+# 4. QUERY STRATEGY (ERROR-WEIGHTED)
 # ============================================================================
 
 def select_samples_by_error(
     predictions: pd.DataFrame,
-    n_query: int,
+    n_query: int = 10,
     strategy: str = 'error_weighted',
-    seed: int = 42,
-    logger: logging.Logger = None
+    seed: int = 42
 ) -> List[dict]:
     """
-    Select samples based on prediction error.
-    
-    Strategy 'error_weighted':
-    - Each sample's selection probability = its_error / sum(all_errors)
-    - Higher error → Higher probability
-    - No thresholds, no filters - pure raw data
+    Select samples for training based on prediction error.
     
     Args:
         predictions: DataFrame with relative_error column
         n_query: Number of samples to select
-        strategy: Query strategy ('error_weighted', ...)
+        strategy: Selection strategy ('error_weighted')
         seed: Random seed
     
     Returns:
-        List of selected composition dicts
-        Also adds 'selected_for_training' column to predictions
+        selected_samples: List of dicts with composition info
     
     Example:
-        >>> selected = select_samples_by_error(predictions, n_query=20)
-        >>> if logger: logger.info(f"Selected {len(selected)} samples")
-    """
-    if strategy == 'error_weighted':
-        return error_weighted_sampling(predictions, n_query, seed)
-    else:
-        raise ValueError(f"Unknown query strategy: {strategy}")
-
-
-def error_weighted_sampling(
-    predictions: pd.DataFrame,
-    n_query: int,
-    seed: int = 42
-) -> List[dict]:
-    """
-    Pure error-weighted sampling.
-    
-    Steps:
-    1. total_error = sum(all relative_errors)
-    2. probability_i = error_i / total_error
-    3. Sample n_query without replacement using probabilities
-    
-    Args:
-        predictions: DataFrame with relative_error column
-        n_query: Number to select
-        seed: Random seed
-    
-    Returns:
-        List of selected composition dicts with metadata
+        >>> selected = select_samples_by_error(predictions, n_query=5)
+        >>> print(selected[0]['composition_str'])
     """
     np.random.seed(seed)
     
-    # Filter valid predictions
-    valid = predictions.dropna(subset=['relative_error']).copy()
-    
-    if len(valid) == 0:
-        if logger: logger.info(f"Warning: No valid predictions for query selection!")
-        return []
-    
-    # Adjust n_query if necessary
-    n_query = min(n_query, len(valid))
-    
-    # Get relative errors
-    errors = valid['relative_error'].values
-    
-    # Calculate probabilities (error proportional)
-    total_error = errors.sum()
-    
-    if total_error == 0:
-        if logger: logger.info(f"Warning: Total error is zero, using uniform sampling")
-        probabilities = np.ones(len(errors)) / len(errors)
-    else:
-        probabilities = errors / total_error
-    
-    # Sample indices
-    selected_indices = np.random.choice(
-        len(valid),
-        size=n_query,
-        replace=False,
-        p=probabilities
-    )
-    
-    # Mark selected samples in DataFrame
-    predictions['selected_for_training'] = False
-    predictions.loc[valid.iloc[selected_indices].index, 'selected_for_training'] = True
-    
-    # Get selected compositions
-    selected_rows = valid.iloc[selected_indices]
-    
-    selected_compositions = []
-    for _, row in selected_rows.iterrows():
-        # Parse composition string back to dict
-        comp_dict = string_to_composition(row['composition'])
+    if strategy == 'error_weighted':
+        # Sample proportional to relative error
+        weights = predictions['relative_error'].values
+        weights = weights / weights.sum()
         
-        selected_compositions.append({
-            'composition': comp_dict,
-            'composition_str': row['composition'],
-            'oracle_barrier': row['oracle_barrier'],
-            'predicted_barrier': row['predicted_barrier'],
-            'relative_error': row['relative_error'],
-            'structure_folder': row['structure_folder']
+        # Sample without replacement
+        n_query = min(n_query, len(predictions))
+        indices = np.random.choice(
+            len(predictions),
+            size=n_query,
+            replace=False,
+            p=weights
+        )
+        
+        selected_samples = []
+        for idx in indices:
+            row = predictions.iloc[idx]
+            selected_samples.append({
+                'composition_str': row['composition'],
+                'structure_folder': row['structure_folder'],
+                'oracle_barrier': row['oracle_barrier'],
+                'predicted_barrier': row['predicted_barrier'],
+                'relative_error': row['relative_error']
+            })
+        
+        return selected_samples
+    
+    else:
+        raise ValueError(f"Unknown strategy: {strategy}")
+
+
+# ============================================================================
+# 5. CONVERGENCE CHECKING
+# ============================================================================
+
+class ConvergenceTracker:
+    """
+    Track convergence metrics across Active Learning cycles.
+    
+    Tracks MAE and relative MAE to determine if model has converged.
+    """
+    
+    def __init__(self, config: Config):
+        """
+        Initialize convergence tracker.
+        
+        Args:
+            config: Config object with convergence parameters
+        """
+        self.config = config
+        self.history = []
+        self.best_mae = float('inf')
+        self.best_rel_mae = float('inf')
+        self.cycles_without_improvement = 0
+    
+    def update(self, cycle: int, mae: float, rel_mae: float) -> bool:
+        """
+        Update tracker with new cycle metrics.
+        
+        Args:
+            cycle: Cycle number
+            mae: Mean Absolute Error (eV)
+            rel_mae: Relative MAE
+        
+        Returns:
+            converged: True if convergence criteria met
+        """
+        self.history.append({
+            'cycle': cycle,
+            'mae': mae,
+            'rel_mae': rel_mae
         })
+        
+        # Check for improvement based on selected metric
+        metric = self.config.al_convergence_metric
+        
+        if metric == "mae":
+            current_value = mae
+            best_value = self.best_mae
+            threshold = self.config.al_convergence_threshold_mae
+        elif metric == "rel_mae":
+            current_value = rel_mae
+            best_value = self.best_rel_mae
+            threshold = self.config.al_convergence_threshold_rel_mae
+        else:
+            raise ValueError(f"Unknown convergence metric: {metric}")
+        
+        # Check if improved
+        if current_value < best_value - threshold:
+            # Significant improvement
+            if metric == "mae":
+                self.best_mae = current_value
+            else:
+                self.best_rel_mae = current_value
+            
+            self.cycles_without_improvement = 0
+            return False
+        else:
+            # No significant improvement
+            self.cycles_without_improvement += 1
+            
+            if self.cycles_without_improvement >= self.config.al_convergence_patience:
+                return True  # Converged
+            else:
+                return False
     
-    return selected_compositions
+    def get_summary(self) -> dict:
+        """Get convergence summary."""
+        return {
+            'history': self.history,
+            'best_mae': self.best_mae,
+            'best_rel_mae': self.best_rel_mae,
+            'cycles_without_improvement': self.cycles_without_improvement,
+            'converged': self.cycles_without_improvement >= self.config.al_convergence_patience
+        }
 
 
-# ============================================================================
-# 5. CSV MANAGEMENT (DISABLED - not needed anymore)
-# ============================================================================
-
-# def save_cycle_predictions(
-#     predictions: pd.DataFrame,
-#     cycle: int,
-#     output_dir: str = "active_learning_results"
-# ):
-#     """
-#     Save predictions CSV for this cycle.
-#     DISABLED: Active learning reports not needed anymore.
-#     """
-#     pass
-
-
-def load_cycle_predictions(
-    cycle: int,
-    output_dir: str = "active_learning_results"
-) -> pd.DataFrame:
+def save_convergence_history(tracker: ConvergenceTracker, save_path: str):
     """
-    Load predictions from specific cycle.
+    Save convergence history to file.
     
     Args:
-        cycle: Cycle number
-        output_dir: Output directory
-    
-    Returns:
-        Predictions DataFrame
+        tracker: ConvergenceTracker instance
+        save_path: Path to save JSON file
     """
-    filename = Path(output_dir) / f"cycle_{cycle}_predictions.csv"
+    import json
     
-    if not filename.exists():
-        raise FileNotFoundError(f"Predictions file not found: {filename}")
+    save_path = Path(save_path)
+    save_path.parent.mkdir(parents=True, exist_ok=True)
     
-    return pd.read_csv(filename)
+    summary = tracker.get_summary()
+    
+    with open(save_path, 'w') as f:
+        json.dump(summary, f, indent=2)
 
 
 # ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
-
-def composition_to_string(comp: dict) -> str:
-    """
-    Format composition dict to string.
-    
-    Args:
-        comp: {'Mo': 0.2, 'Nb': 0.3, ...}
-    
-    Returns:
-        String: 'Mo0.200Nb0.300O0.200Ta0.150W0.150'
-    
-    Example:
-        >>> composition_to_string({'Mo': 0.2, 'Nb': 0.3, 'O': 0.5})
-        'Mo0.200Nb0.300O0.500'
-    """
-    return "".join(f"{elem}{frac:.3f}" for elem, frac in sorted(comp.items()))
-
-
-def string_to_composition(comp_str: str) -> dict:
-    """
-    Parse composition string to dict.
-    
-    Args:
-        comp_str: 'Mo0.200Nb0.300O0.500'
-    
-    Returns:
-        dict: {'Mo': 0.2, 'Nb': 0.3, 'O': 0.5}
-    
-    Example:
-        >>> string_to_composition('Mo0.200Nb0.300O0.500')
-        {'Mo': 0.2, 'Nb': 0.3, 'O': 0.5}
-    """
-    import re
-    pattern = r'([A-Z][a-z]?)([0-9.]+)'
-    matches = re.findall(pattern, comp_str)
-    return {elem: float(frac) for elem, frac in matches}
-
-
-# ============================================================================
-# COMPLETE CYCLE FUNCTION
+# 6. COMPLETE INFERENCE CYCLE
 # ============================================================================
 
 def run_inference_cycle(
@@ -638,102 +464,131 @@ def run_inference_cycle(
     model_path: str,
     oracle: Oracle,
     config: Config,
+    convergence_tracker: Optional[ConvergenceTracker] = None,
     verbose: bool = True
 ) -> Tuple[List[dict], pd.DataFrame]:
     """
-    Complete inference cycle for active learning.
+    Run complete inference cycle for Active Learning.
     
-    Steps:
-    1. Generate n_test compositions (uniform grid)
-    2. Oracle generates ground truth barriers + GPU cleanup
-    3. Model predicts barriers + GPU cleanup
-    4. Calculate errors (relative & absolute)
-    5. Select n_query samples (error-weighted)
-    6. Return selected compositions for training
+    Workflow:
+    1. Generate test compositions
+    2. Calculate barriers with Oracle
+    3. Predict with model
+    4. Select high-error samples for training
+    5. Check convergence (optional)
     
     Args:
-        cycle: Cycle number (for logging/saving)
-        model_path: Path to trained model checkpoint
+        cycle: Cycle number
+        model_path: Path to trained model
         oracle: Oracle instance
-        config: Config object with AL parameters
-        verbose: Print detailed progress
+        config: Config object
+        convergence_tracker: ConvergenceTracker instance (optional)
+        verbose: Print progress
     
     Returns:
-        selected_compositions: List of dicts with selected samples
-        predictions_df: Full predictions DataFrame
+        selected_samples: List of selected samples for next training
+        predictions: Full predictions DataFrame
     
     Example:
-        >>> selected, predictions = run_inference_cycle(
+        >>> tracker = ConvergenceTracker(config)
+        >>> selected, preds = run_inference_cycle(
         ...     cycle=0,
-        ...     model_path='checkpoints/best_model.pt',
+        ...     model_path='checkpoints/cycle_0/best_model.pt',
         ...     oracle=oracle,
-        ...     config=config
+        ...     config=config,
+        ...     convergence_tracker=tracker
         ... )
-        >>> logger.info(f"Selected {len(selected)} samples for next training")
     """
-    # Setup logger for this cycle
     logger = setup_inference_logger(cycle, config)
     
-    if verbose:
-        logger.info("="*70)
-        logger.info(f"INFERENCE CYCLE {cycle}")
-        logger.info("="*70)
-        logger.info(f"Test samples (n_test): {config.al_n_test}")
-        logger.info(f"Query samples (n_query): {config.al_n_query}")
-        logger.info(f"Test strategy: {config.al_test_strategy}")
-        logger.info(f"Query strategy: {config.al_query_strategy}")
+    logger.info("="*70)
+    logger.info(f"INFERENCE CYCLE {cycle}")
+    logger.info("="*70)
+    
+    # Get elements from config
+    elements = list(config.elements)
     
     # 1. Generate test compositions
-    builder = TemplateGraphBuilder(config)
-    elements = builder.elements
-    
+    logger.info(f"Step 1: Generating {config.al_n_test} test compositions")
     test_compositions = generate_test_compositions(
         elements=elements,
         n_test=config.al_n_test,
         strategy=config.al_test_strategy,
-        seed=config.al_seed + cycle  # Different seed per cycle
+        seed=config.al_seed + cycle
     )
+    logger.info(f"  Generated {len(test_compositions)} compositions")
     
-    # 2. Oracle generates test data (ground truth)
+    # 2. Generate test data with Oracle
+    logger.info(f"Step 2: Calculating barriers with Oracle")
     test_data = generate_test_data_with_oracle(
         compositions=test_compositions,
         oracle=oracle,
         config=config,
-        logger=logger,
         verbose=verbose
     )
+    logger.info(f"  Calculated {len(test_data)} barriers")
     
-    # 3. Model predictions
+    # 3. Predict with model
+    logger.info(f"Step 3: Predicting barriers with model")
     predictions = predict_barriers_for_test_set(
         model_path=model_path,
         test_data=test_data,
         config=config,
-        logger=logger,
         verbose=verbose
     )
+    logger.info(f"  Made {len(predictions)} predictions")
     
-    # 4. Select samples by error
-    selected_compositions = select_samples_by_error(
+    # Calculate statistics
+    mae = predictions['absolute_error'].mean()
+    rel_mae = predictions['relative_error'].mean()
+    max_error = predictions['absolute_error'].max()
+    
+    logger.info(f"\nPrediction Statistics:")
+    logger.info(f"  MAE: {mae:.4f} eV")
+    logger.info(f"  Relative MAE: {rel_mae:.4f}")
+    logger.info(f"  Max error: {max_error:.4f} eV")
+    
+    # 4. Update convergence tracker
+    if convergence_tracker is not None:
+        converged = convergence_tracker.update(cycle, mae, rel_mae)
+        logger.info(f"\nConvergence Status:")
+        logger.info(f"  Metric: {config.al_convergence_metric}")
+        logger.info(f"  Best MAE: {convergence_tracker.best_mae:.4f} eV")
+        logger.info(f"  Best Rel MAE: {convergence_tracker.best_rel_mae:.4f}")
+        logger.info(f"  Cycles without improvement: {convergence_tracker.cycles_without_improvement}")
+        logger.info(f"  Converged: {converged}")
+    
+    # 5. Select samples for training
+    logger.info(f"\nStep 4: Selecting {config.al_n_query} samples for training")
+    selected_samples = select_samples_by_error(
         predictions=predictions,
         n_query=config.al_n_query,
         strategy=config.al_query_strategy,
-        seed=config.al_seed + cycle,
-        logger=logger
+        seed=config.al_seed + cycle
     )
+    logger.info(f"  Selected {len(selected_samples)} samples")
     
-    if verbose:
-        logger.info(f"✓ Selected {len(selected_compositions)} samples for training")
-        if len(selected_compositions) > 0:
-            errors = [s['relative_error'] for s in selected_compositions]
-            logger.info(f"  Error range: [{min(errors):.3f}, {max(errors):.3f}]")
-            logger.info(f"  Mean error: {np.mean(errors):.3f}")
+    # Show top errors
+    logger.info(f"\nTop 5 selected samples by error:")
+    for i, sample in enumerate(selected_samples[:5], 1):
+        logger.info(
+            f"  {i}. {sample['composition_str']}: "
+            f"Oracle={sample['oracle_barrier']:.3f} eV, "
+            f"Pred={sample['predicted_barrier']:.3f} eV, "
+            f"RelErr={sample['relative_error']:.3f}"
+        )
     
-    # Note: save_cycle_predictions() removed (Issue #4)
+    # 6. Save predictions
+    results_dir = Path(config.al_results_dir)
+    results_dir.mkdir(parents=True, exist_ok=True)
     
-    if verbose:
-        logger.info("="*70)
+    predictions_file = results_dir / f"cycle_{cycle}_predictions.csv"
+    predictions.to_csv(predictions_file, index=False)
+    logger.info(f"\nPredictions saved: {predictions_file}")
     
-    return selected_compositions, predictions
+    logger.info("="*70)
+    
+    return selected_samples, predictions
 
 
 # ============================================================================
@@ -741,12 +596,28 @@ def run_inference_cycle(
 # ============================================================================
 
 if __name__ == "__main__":
-    if logger: logger.info(f"inference.py - Import and use run_inference_cycle()")
-    if logger: logger.info(f"\nExample:")
-    if logger: logger.info(f"  from inference import run_inference_cycle")
-    if logger: logger.info(f"  selected, predictions = run_inference_cycle(")
-    if logger: logger.info(f"      cycle=0,")
-    if logger: logger.info(f"      model_path='checkpoints/best_model.pt',")
-    if logger: logger.info(f"      oracle=oracle,")
-    if logger: logger.info(f"      config=config")
-    if logger: logger.info(f"  )")
+    print("="*70)
+    print("INFERENCE MODULE")
+    print("="*70)
+    
+    print("\nFeatures:")
+    print("  1. Test composition generation")
+    print("  2. Oracle-based test data generation")
+    print("  3. Model predictions")
+    print("  4. Error-weighted query strategy")
+    print("  5. Convergence checking (NEW!)")
+    print("  6. Complete inference cycle")
+    
+    print("\nUsage:")
+    print("  from inference import run_inference_cycle, ConvergenceTracker")
+    print("")
+    print("  tracker = ConvergenceTracker(config)")
+    print("  selected, predictions = run_inference_cycle(")
+    print("      cycle=0,")
+    print("      model_path='checkpoints/cycle_0/best_model.pt',")
+    print("      oracle=oracle,")
+    print("      config=config,")
+    print("      convergence_tracker=tracker")
+    print("  )")
+    
+    print("\n" + "="*70)

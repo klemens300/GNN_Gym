@@ -73,17 +73,25 @@ class Config:
     
     # Training loop
     epochs: int = 5000                   # Maximum number of epochs
-    patience: int = 50                   # Early stopping patience
+    patience: int = 50                   # Early stopping patience (epochs)
     save_interval: int = 50              # Save checkpoint every N epochs
+    
+    # Final model training (after convergence or max cycles)
+    final_model_patience: int = 100      # Higher patience for final model
     
     # Learning rate scheduling
     use_scheduler: bool = True           # Use learning rate scheduler
-    scheduler_type: str = "cosine"      # Scheduler type: "plateau", "cosine", "step", or "none" ONLY COSINE TESTED
+    scheduler_type: str = "cosine_warm_restarts"  # Scheduler type: "plateau", "cosine", "cosine_warm_restarts", "step", or "none"
     scheduler_factor: float = 0.5        # Reduce LR by this factor (plateau, step)
     scheduler_patience: int = 10         # Patience for LR reduction (plateau)
     scheduler_step_size: int = 100       # Step size for StepLR (step)
     scheduler_t_max: int = 100           # T_max for CosineAnnealingLR (cosine)
-    scheduler_eta_min: float = 1e-6      # Minimum LR for CosineAnnealingLR (cosine)
+    scheduler_eta_min: float = 1e-6      # Minimum LR for CosineAnnealingLR (cosine, cosine_warm_restarts)
+    
+    # Cosine Warm Restarts specific
+    scheduler_t_0: int = 50             # First restart period (epochs)
+    scheduler_t_mult: int = 1.2            # Period multiplier (each restart is T_mult times longer)
+    scheduler_restart_decay: float = 0.8 # LR decay factor after restart (< 1: decay, = 1: constant, > 1: amplification)
     
     # ============================================================
     # NEB (Nudged Elastic Band) PARAMETERS
@@ -120,6 +128,13 @@ class Config:
     al_max_cycles: int = 10                   # Maximum number of AL cycles
     al_seed: int = 42                         # Random seed for AL (gets incremented per cycle)
 
+    # Convergence criteria
+    al_convergence_check: bool = True                    # Enable convergence checking
+    al_convergence_metric: str = "mae"                   # Metric: "mae" or "rel_mae"
+    al_convergence_threshold_mae: float = 0.1           # MAE threshold (eV)
+    al_convergence_threshold_rel_mae: float = 0.10       # Relative MAE threshold (10%)
+    al_convergence_patience: int = 2                     # Cycles without improvement before stopping
+
     # Output
     al_results_dir: str = "active_learning_results"  # Directory for AL results
     
@@ -139,7 +154,7 @@ class Config:
     # LOGGING (Weights & Biases)
     # ============================================================
     use_wandb: bool = True                    # Enable/disable wandb
-    wandb_project: str = "GNN_Gym_final_test_debug_3"  # Wandb project name
+    wandb_project: str = "GNN_Gym_final_test_debug_4"  # Wandb project name
     wandb_entity: str = None                  # Wandb entity (username/team), None = default
     wandb_run_name: str = None                # Run name, None = auto-generated
     wandb_tags: List[str] = field(default_factory=list)  # Tags for the run
@@ -193,25 +208,34 @@ class Config:
         
         return model_name
     
-    def get_experiment_name(self, cycle: int = None) -> str:
+    def get_experiment_name(self, n_samples: int = None, cycle: int = None) -> str:
         """
-        Generate experiment name for wandb with timestamp and cycle.
+        Generate experiment name for wandb with timestamp, dataset size, and cycle.
         
-        Format: {date}-{time}-cycle{c}-GNN
+        Format: {date}-{time}-samples{n}-cycle{c}-GNN
         
         Args:
+            n_samples: Number of training samples (optional)
             cycle: Active learning cycle number (optional)
         
         Returns:
             experiment_name: Simple experiment name with timestamp
         
         Example:
-            "20241030-143522-cycle0-GNN"
+            "20241030-143522-samples2500-cycle0-GNN"
         """
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        parts = [timestamp]
+        
+        if n_samples is not None:
+            parts.append(f"samples{n_samples}")
+        
         if cycle is not None:
-            return f"{timestamp}-cycle{cycle}-GNN"
-        return f"{timestamp}-GNN"
+            parts.append(f"cycle{cycle}")
+        
+        parts.append("GNN")
+        
+        return "-".join(parts)
 
 
 # Display config
@@ -263,19 +287,29 @@ if __name__ == "__main__":
     print(f"  gradient_clip_norm: {config.gradient_clip_norm}")
     print(f"  epochs: {config.epochs}")
     print(f"  patience: {config.patience}")
+    print(f"  final_model_patience: {config.final_model_patience}")
     print(f"  save_interval: {config.save_interval}")
     
     print("\nLEARNING RATE SCHEDULER:")
     print(f"  use_scheduler: {config.use_scheduler}")
     print(f"  scheduler_type: {config.scheduler_type}")
-    print(f"  scheduler_factor: {config.scheduler_factor}")
-    print(f"  scheduler_patience: {config.scheduler_patience}")
-    print(f"  scheduler_step_size: {config.scheduler_step_size}")
-    print(f"  scheduler_t_max: {config.scheduler_t_max}")
-    print(f"  scheduler_eta_min: {config.scheduler_eta_min}")
+    if config.scheduler_type == "cosine_warm_restarts":
+        print(f"  scheduler_t_0: {config.scheduler_t_0}")
+        print(f"  scheduler_t_mult: {config.scheduler_t_mult}")
+        print(f"  scheduler_restart_decay: {config.scheduler_restart_decay}")
+        print(f"  scheduler_eta_min: {config.scheduler_eta_min}")
+    elif config.scheduler_type == "cosine":
+        print(f"  scheduler_t_max: {config.scheduler_t_max}")
+        print(f"  scheduler_eta_min: {config.scheduler_eta_min}")
+    elif config.scheduler_type == "plateau":
+        print(f"  scheduler_factor: {config.scheduler_factor}")
+        print(f"  scheduler_patience: {config.scheduler_patience}")
+    elif config.scheduler_type == "step":
+        print(f"  scheduler_step_size: {config.scheduler_step_size}")
+        print(f"  scheduler_factor: {config.scheduler_factor}")
     
     print("\nNEB PARAMETERS:")
-    print(f"  neb_n_images: {config.neb_n_images}")
+    print(f"  neb_images: {config.neb_images}")
     print(f"  neb_spring_constant: {config.neb_spring_constant} eV/Å²")
     print(f"  neb_fmax: {config.neb_fmax} eV/Å")
     print(f"  neb_max_steps: {config.neb_max_steps}")
@@ -283,6 +317,7 @@ if __name__ == "__main__":
     print(f"  neb_method: {config.neb_method}")
     
     print("\nACTIVE LEARNING:")
+    print(f"  al_initial_samples: {config.al_initial_samples}")
     print(f"  al_n_test: {config.al_n_test}")
     print(f"  al_test_strategy: {config.al_test_strategy}")
     print(f"  al_n_query: {config.al_n_query}")
@@ -290,6 +325,13 @@ if __name__ == "__main__":
     print(f"  al_max_cycles: {config.al_max_cycles}")
     print(f"  al_seed: {config.al_seed}")
     print(f"  al_results_dir: {config.al_results_dir}")
+    
+    print("\nCONVERGENCE CRITERIA:")
+    print(f"  al_convergence_check: {config.al_convergence_check}")
+    print(f"  al_convergence_metric: {config.al_convergence_metric}")
+    print(f"  al_convergence_threshold_mae: {config.al_convergence_threshold_mae} eV")
+    print(f"  al_convergence_threshold_rel_mae: {config.al_convergence_threshold_rel_mae}")
+    print(f"  al_convergence_patience: {config.al_convergence_patience} cycles")
     
     print("\nLOGGING (Weights & Biases):")
     print(f"  use_wandb: {config.use_wandb}")
@@ -303,7 +345,7 @@ if __name__ == "__main__":
     print(f"  wandb_watch_freq: {config.wandb_watch_freq}")
     
     print("\nGENERATED NAMES:")
-    print(f"  Model name: {config.get_model_name()}")
-    print(f"  Experiment name: {config.get_experiment_name()}")
+    print(f"  Model name: {config.get_model_name(n_samples=2500, cycle=0)}")
+    print(f"  Experiment name: {config.get_experiment_name(n_samples=2500, cycle=0)}")
     
     print("\n" + "="*70)
