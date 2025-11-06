@@ -3,6 +3,11 @@ Trainer for Diffusion Barrier Prediction
 
 Handles training loop, validation, checkpointing, early stopping, and logging.
 Includes Cosine Warm Restarts scheduler and comprehensive MAE tracking.
+
+CORRECTIONS:
+- Removed rel_mae from wandb logging
+- Added patience_counter to wandb
+- Removed epoch from wandb logging
 """
 
 import torch
@@ -176,7 +181,8 @@ class Trainer:
     - Learning rate scheduling (including Cosine Warm Restarts)
     - Checkpoint management
     - Comprehensive logging (file + wandb)
-    - MAE and relative MAE tracking
+    - MAE tracking (rel_mae removed from wandb)
+    - Patience counter in wandb
     - Bar charts for best metrics
     """
     
@@ -565,21 +571,22 @@ class Trainer:
                     f"LR: {current_lr:.2e}"
                 )
             
-            # Log to wandb
+            # ========== CORRECTED: Wandb logging ==========
+            # - Removed rel_mae metrics
+            # - Added patience_counter
+            # - Removed epoch counter
             if self.use_wandb and epoch % self.config.wandb_log_interval == 0:
                 wandb.log({
-                    'epoch': epoch,
                     'train/loss': train_loss,
                     'val/loss': val_loss,
                     'train/mae': train_mae,
                     'val/mae': val_mae,
-                    'train/rel_mae': train_rel_mae,
-                    'val/rel_mae': val_rel_mae,
                     'learning_rate': current_lr,
+                    'patience_counter': self.patience_counter,
                     'best/train_mae': self.best_train_mae,
-                    'best/val_mae': self.best_val_mae,
-                    'best/val_rel_mae': self.best_val_rel_mae
+                    'best/val_mae': self.best_val_mae
                 })
+            # =============================================
             
             # Learning rate scheduling
             if self.scheduler is not None:
@@ -664,8 +671,13 @@ class Trainer:
 # Example usage
 if __name__ == "__main__":
     print("="*70)
-    print("TRAINER MODULE")
+    print("TRAINER MODULE (CORRECTED)")
     print("="*70)
+    
+    print("\nCORRECTIONS:")
+    print("  ✓ Removed rel_mae from wandb logging")
+    print("  ✓ Added patience_counter to wandb")
+    print("  ✓ Removed epoch counter from wandb")
     
     print("\nFeatures:")
     print("  - Training and validation loops")
@@ -673,11 +685,11 @@ if __name__ == "__main__":
     print("  - Learning rate scheduling:")
     print("    * ReduceLROnPlateau")
     print("    * CosineAnnealingLR")
-    print("    * CosineAnnealingWarmRestarts (NEW!)")
+    print("    * CosineAnnealingWarmRestarts")
     print("    * StepLR")
     print("  - Checkpoint management")
     print("  - Comprehensive logging (file + wandb)")
-    print("  - MAE and Relative MAE tracking")
+    print("  - MAE tracking")
     print("  - Bar charts for best metrics")
     print("  - Config file upload to wandb")
     

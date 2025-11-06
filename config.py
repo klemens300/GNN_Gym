@@ -67,13 +67,13 @@ class Config:
     # TRAINING
     # ============================================================
     # Optimization
-    learning_rate: float = 5e-4          # Initial learning rate
+    learning_rate: float = 1e-3          # Initial learning rate
     weight_decay: float = 0.01           # L2 regularization (AdamW)
     gradient_clip_norm: float = 1.0      # Max gradient norm
     
     # Training loop
     epochs: int = 10000                   # Maximum number of epochs
-    patience: int = 100                   # Early stopping patience (epochs)
+    patience: int = 200                   # Early stopping patience (epochs)
     save_interval: int = 50              # Save checkpoint every N epochs
     
     # Final model training (after convergence or max cycles)
@@ -89,9 +89,9 @@ class Config:
     scheduler_eta_min: float = 1e-6      # Minimum LR for CosineAnnealingLR (cosine, cosine_warm_restarts)
     
     # Cosine Warm Restarts specific
-    scheduler_t_0: int = 50             # First restart period (epochs)
+    scheduler_t_0: int = 100             # First restart period (epochs)
     scheduler_t_mult: int = 1.2            # Period multiplier (each restart is T_mult times longer)
-    scheduler_restart_decay: float = 0.8 # LR decay factor after restart (< 1: decay, = 1: constant, > 1: amplification)
+    scheduler_restart_decay: float = 0.9 # LR decay factor after restart (< 1: decay, = 1: constant, > 1: amplification)
     
     # ============================================================
     # NEB (Nudged Elastic Band) PARAMETERS
@@ -132,7 +132,7 @@ class Config:
     al_convergence_metric: str = "mae"                   # Metric: "mae" or "rel_mae"
     al_convergence_threshold_mae: float = 0.01           # MAE threshold (eV)
     al_convergence_threshold_rel_mae: float = 0.1       # Relative MAE threshold (10%)
-    al_convergence_patience: int = 5                     # Cycles without improvement before stopping
+    al_convergence_patience: int = 20                     # Cycles without improvement before stopping
 
     # Output
     al_results_dir: str = "active_learning_results"  # Directory for AL results
@@ -153,7 +153,7 @@ class Config:
     # LOGGING (Weights & Biases)
     # ============================================================
     use_wandb: bool = True                    # Enable/disable wandb
-    wandb_project: str = "GNN_Gym_MoNbTaW"  # Wandb project name
+    wandb_project: str = "GNN_Gym_MoNbTaW_v2"  # Wandb project name
     wandb_entity: str = None                  # Wandb entity (username/team), None = default
     wandb_run_name: str = None                # Run name, None = auto-generated
     wandb_tags: List[str] = field(default_factory=list)  # Tags for the run
