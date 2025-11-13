@@ -16,5 +16,7 @@ logs/
 active_learning_results/
 MoNbTaW/
 MoNbTaW.csv
+MoNbTaWCr/
+MoNbTaWCr.csv
 *.err
 *.out
