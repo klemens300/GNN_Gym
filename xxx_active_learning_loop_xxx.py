@@ -14,7 +14,13 @@ import torch
 # --- Project imports ---
 from config import Config
 from oracle import Oracle
-from inference import run_inference_cycle, cleanup_gpu, ConvergenceTracker, save_convergence_history
+from inference import (
+    run_inference_cycle,
+    cleanup_gpu,
+    ConvergenceTracker,
+    save_convergence_history,
+    generate_and_calculate_query_data
+)
 from trainer import Trainer
 from dataset import create_dataloaders
 from template_graph_builder import TemplateGraphBuilder
@@ -279,14 +285,27 @@ def active_learning_loop(config: Config, logger: logging.Logger):
         logger.info("Starting inference cycle ...")
         try:
             selected, predictions = run_inference_cycle(
-                cycle, 
-                str(current_model), 
-                oracle, 
-                config, 
+                cycle,
+                str(current_model),
+                oracle,
+                config,
                 convergence_tracker=convergence_tracker,
                 verbose=True
             )
-            
+
+            # Generate and calculate query data based on high-error samples
+            logger.info(f"Generating and calculating {config.al_n_query} query samples ...")
+            db_stats_before = get_database_stats(config.csv_path)
+            n_query_added = generate_and_calculate_query_data(
+                selected_samples=selected,
+                oracle=oracle,
+                config=config,
+                verbose=True
+            )
+            db_stats_after = get_database_stats(config.csv_path)
+            logger.info(f"Query data generation completed: {n_query_added} samples added to CSV")
+            logger.info(f"Database size: {db_stats_before['n_samples']} -> {db_stats_after['n_samples']} samples")
+
             # Check convergence
             if convergence_tracker is not None:
                 summary = convergence_tracker.get_summary()

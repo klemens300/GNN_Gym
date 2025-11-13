@@ -351,6 +351,196 @@ def select_samples_by_error(
 
 
 # ============================================================================
+# 4.5. QUERY COMPOSITION GENERATION
+# ============================================================================
+
+def parse_composition_string(comp_str: str) -> dict:
+    """
+    Parse composition string to dict.
+
+    Args:
+        comp_str: Composition string like 'Mo0.50W0.50'
+
+    Returns:
+        composition: Dict {element: fraction}
+
+    Example:
+        >>> comp = parse_composition_string('Mo0.50W0.50')
+        >>> print(comp)
+        {'Mo': 0.50, 'W': 0.50}
+    """
+    import re
+    pattern = r'([A-Z][a-z]?)(\d+\.\d+)'
+    matches = re.findall(pattern, comp_str)
+
+    composition = {}
+    for element, fraction in matches:
+        composition[element] = float(fraction)
+
+    return composition
+
+
+def generate_query_compositions_from_selected(
+    selected_samples: List[dict],
+    n_query: int,
+    elements: List[str],
+    strategy: str = 'nearby',
+    noise_level: float = 0.1,
+    seed: int = 42
+) -> List[dict]:
+    """
+    Generate new query compositions based on selected high-error samples.
+
+    Strategy:
+    - 'nearby': Generate compositions near high-error samples with random noise
+    - 'interpolate': Generate compositions by interpolating between high-error samples
+
+    Args:
+        selected_samples: List of selected samples from select_samples_by_error
+        n_query: Number of query compositions to generate
+        elements: List of element symbols
+        strategy: Generation strategy ('nearby', 'interpolate')
+        noise_level: Amount of noise to add (0.0 to 1.0)
+        seed: Random seed
+
+    Returns:
+        query_compositions: List of composition dicts
+
+    Example:
+        >>> query_comps = generate_query_compositions_from_selected(
+        ...     selected_samples=[{'composition_str': 'Mo0.50W0.50', ...}],
+        ...     n_query=100,
+        ...     elements=['Mo', 'W']
+        ... )
+    """
+    np.random.seed(seed)
+
+    if not selected_samples:
+        raise ValueError("No selected samples provided")
+
+    query_compositions = []
+
+    if strategy == 'nearby':
+        # Generate compositions near high-error samples
+        # Sample selected_samples with replacement to get n_query base compositions
+        n_selected = len(selected_samples)
+        base_indices = np.random.choice(n_selected, size=n_query, replace=True)
+
+        for idx in base_indices:
+            sample = selected_samples[idx]
+            # Parse composition string
+            base_comp = parse_composition_string(sample['composition_str'])
+
+            # Add noise to composition
+            comp_array = np.array([base_comp.get(elem, 0.0) for elem in elements])
+
+            # Add Dirichlet noise (keeps on simplex)
+            # Higher alpha = less noise
+            alpha = comp_array / noise_level + 1e-6
+            alpha = np.maximum(alpha, 0.1)  # Ensure positive
+            noisy_comp = np.random.dirichlet(alpha)
+
+            # Create composition dict
+            new_comp = {elem: float(frac) for elem, frac in zip(elements, noisy_comp)}
+            query_compositions.append(new_comp)
+
+    elif strategy == 'interpolate':
+        # Generate compositions by interpolating between pairs of high-error samples
+        n_selected = len(selected_samples)
+
+        for i in range(n_query):
+            # Pick two random samples
+            idx1, idx2 = np.random.choice(n_selected, size=2, replace=True)
+            sample1 = selected_samples[idx1]
+            sample2 = selected_samples[idx2]
+
+            # Parse compositions
+            comp1 = parse_composition_string(sample1['composition_str'])
+            comp2 = parse_composition_string(sample2['composition_str'])
+
+            # Random interpolation weight
+            weight = np.random.random()
+
+            # Interpolate
+            new_comp = {}
+            for elem in elements:
+                frac1 = comp1.get(elem, 0.0)
+                frac2 = comp2.get(elem, 0.0)
+                new_comp[elem] = weight * frac1 + (1 - weight) * frac2
+
+            # Normalize to sum to 1.0
+            total = sum(new_comp.values())
+            if total > 0:
+                new_comp = {elem: frac / total for elem, frac in new_comp.items()}
+
+            query_compositions.append(new_comp)
+
+    else:
+        raise ValueError(f"Unknown strategy: {strategy}")
+
+    return query_compositions
+
+
+def generate_and_calculate_query_data(
+    selected_samples: List[dict],
+    oracle: Oracle,
+    config: Config,
+    verbose: bool = False
+) -> int:
+    """
+    Generate and calculate query compositions based on high-error samples.
+
+    This function:
+    1. Generates new compositions near high-error samples
+    2. Calculates barriers with Oracle (adds to CSV)
+    3. Returns number of successful calculations
+
+    Args:
+        selected_samples: List of selected high-error samples
+        oracle: Oracle instance
+        config: Config object
+        verbose: Print progress
+
+    Returns:
+        n_successful: Number of successfully calculated query samples
+
+    Example:
+        >>> n_added = generate_and_calculate_query_data(
+        ...     selected_samples=selected,
+        ...     oracle=oracle,
+        ...     config=config
+        ... )
+        >>> print(f"Added {n_added} query samples to CSV")
+    """
+    elements = list(config.elements)
+    n_query = config.al_n_query
+
+    # Generate query compositions
+    query_compositions = generate_query_compositions_from_selected(
+        selected_samples=selected_samples,
+        n_query=n_query,
+        elements=elements,
+        strategy='nearby',
+        noise_level=0.1,
+        seed=config.al_seed
+    )
+
+    # Calculate with Oracle
+    n_successful = 0
+    iterator = tqdm(query_compositions, desc="Calculating query data") if verbose else query_compositions
+
+    for comp in iterator:
+        success = oracle.calculate(comp)
+        if success:
+            n_successful += 1
+
+    # Cleanup after Oracle operations
+    cleanup_gpu()
+
+    return n_successful
+
+
+# ============================================================================
 # 5. CONVERGENCE CHECKING
 # ============================================================================
 
