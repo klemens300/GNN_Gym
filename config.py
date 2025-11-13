@@ -16,14 +16,14 @@ class Config:
     # ============================================================
     # PATHS
     # ============================================================
-    csv_path: str = "MoNbTaW.csv"
+    csv_path: str = "MoNbTaWCr.csv"
     checkpoint_dir: str = "checkpoints"
-    database_dir: str = "MoNbTaW"          # Directory for structure files
+    database_dir: str = "MoNbTaWCr"          # Directory for structure files
     
     # ============================================================
     # MATERIAL SYSTEM (Elements)
     # ============================================================
-    elements: List[str] = field(default_factory=lambda: ['Mo', 'Nb', 'Ta', 'W'])
+    elements: List[str] = field(default_factory=lambda: ['Mo', 'Nb', 'Ta', 'W', 'Cr'])
     
     # ============================================================
     # CRYSTAL STRUCTURE
@@ -153,7 +153,7 @@ class Config:
     # LOGGING (Weights & Biases)
     # ============================================================
     use_wandb: bool = True                    # Enable/disable wandb
-    wandb_project: str = "GNN_Gym_MoNbTaW_v3"  # Wandb project name
+    wandb_project: str = "GNN_Gym_MoNbTaW_Cr"  # Wandb project name
     wandb_entity: str = None                  # Wandb entity (username/team), None = default
     wandb_run_name: str = None                # Run name, None = auto-generated
     wandb_tags: List[str] = field(default_factory=list)  # Tags for the run

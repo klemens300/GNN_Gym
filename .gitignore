@@ -16,3 +16,5 @@ logs/
 active_learning_results/
 MoNbTaW/
 MoNbTaW.csv
+*.err
+*.out
