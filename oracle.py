@@ -4,9 +4,13 @@ Oracle for NEB calculations on BCC structures with vacancies.
 Handles:
 - BCC supercell creation with arbitrary compositions
 - Vacancy creation and neighbor selection
-- Structure relaxation using CHGNet
+- Structure relaxation using CHGNet or FAIRChem
 - NEB calculations
 - Data storage with run numbering per composition
+
+Supports multiple calculators:
+- CHGNet: Pre-trained universal model
+- FAIRChem: UMA models (uma-m-1p1 for best accuracy)
 """
 
 import os
@@ -33,7 +37,7 @@ warnings.filterwarnings('ignore')
 
 @contextmanager
 def suppress_output():
-    """Context manager to suppress stdout/stderr during CHGNet operations"""
+    """Context manager to suppress stdout/stderr during calculator operations"""
     with open(os.devnull, 'w') as devnull:
         old_stdout = sys.stdout
         old_stderr = sys.stderr
@@ -53,9 +57,9 @@ class Oracle:
     Workflow:
     1. Create BCC supercell with random element distribution
     2. Create vacancy at center
-    3. Relax → initial structure
+    3. Relax initial structure
     4. Pick random neighbor, move to vacancy
-    5. Relax → final structure
+    5. Relax final structure
     6. Run NEB between initial and final
     7. Save everything (structures, energies, barriers)
     """
@@ -83,9 +87,14 @@ class Oracle:
         # Initialize CSV if needed
         self._init_csv()
         
+        # Initialize calculator-specific components
+        self.calculator_name = config.calculator
+        self._init_calculator()
+        
         self.logger.info("Oracle initialized")
         self.logger.info(f"  Database: {self.database_dir}")
         self.logger.info(f"  CSV: {self.csv_path}")
+        self.logger.info(f"  Calculator: {self.calculator_name}")
     
     def _setup_logger(self, log_file: Path, level: str = "INFO", also_console: bool = True):
         """Setup logger for Oracle."""
@@ -118,6 +127,45 @@ class Oracle:
             logger.addHandler(ch)
         
         return logger
+    
+    def _init_calculator(self):
+        """
+        Initialize calculator-specific components.
+        Sets up model name and predictor for FAIRChem if needed.
+        """
+        if self.calculator_name == "chgnet":
+            self.model_name = "CHGNet-pretrained"
+            self.predictor = None  # CHGNet doesn't use a separate predictor
+        elif self.calculator_name == "fairchem":
+            self.model_name = "UMA-m-1p1"
+            # Initialize FAIRChem predictor once (reused for all calculations)
+            from fairchem.core import pretrained_mlip
+            with suppress_output():
+                self.predictor = pretrained_mlip.get_predict_unit("uma-m-1p1", device="cuda")
+            self.logger.info(f"  FAIRChem predictor loaded: uma-m-1p1")
+        else:
+            raise ValueError(f"Unknown calculator: {self.calculator_name}")
+    
+    def _create_calculator(self):
+        """
+        Create calculator instance.
+        
+        Returns:
+        --------
+        calculator : ASE Calculator
+            Configured calculator (CHGNet or FAIRChem)
+        """
+        if self.calculator_name == "chgnet":
+            from chgnet.model.dynamics import CHGNetCalculator
+            return CHGNetCalculator(verbose=False)
+        
+        elif self.calculator_name == "fairchem":
+            from fairchem.core import FAIRChemCalculator
+            # Use pre-initialized predictor
+            return FAIRChemCalculator(self.predictor, task_name="omat")
+        
+        else:
+            raise ValueError(f"Unknown calculator: {self.calculator_name}")
     
     def _init_csv(self):
         """Initialize CSV with headers if it doesn't exist"""
@@ -327,7 +375,7 @@ class Oracle:
     
     def _relax_structure(self, atoms):
         """
-        Relax structure using CHGNet (SILENT MODE).
+        Relax structure using configured calculator (SILENT MODE).
         
         Parameters:
         -----------
@@ -343,30 +391,59 @@ class Oracle:
         relax_time : float
             Relaxation time in seconds
         """
-        from chgnet.model.dynamics import StructOptimizer
-        
         relax_start = time.time()
         
-        with suppress_output():
-            relaxer = StructOptimizer()
-            result = relaxer.relax(
-                atoms,
-                relax_cell=self.config.relax_cell,
-                fmax=self.config.relax_fmax,
-                steps=self.config.relax_max_steps,
-                verbose=False
-            )
+        if self.calculator_name == "chgnet":
+            # CHGNet uses StructOptimizer
+            from chgnet.model.dynamics import StructOptimizer
+            
+            with suppress_output():
+                relaxer = StructOptimizer()
+                result = relaxer.relax(
+                    atoms,
+                    relax_cell=self.config.relax_cell,
+                    fmax=self.config.relax_fmax,
+                    steps=self.config.relax_max_steps,
+                    verbose=False
+                )
+            
+            relaxed_structure = result['final_structure']
+            relaxed_atoms = relaxed_structure.to_ase_atoms()
+            energy = result['trajectory'].energies[-1]  # Final energy
+            
+            # Cleanup
+            del relaxer
+            del result
+            gc.collect()
+        
+        elif self.calculator_name == "fairchem":
+            # FAIRChem uses standard ASE optimization
+            atoms.calc = self._create_calculator()
+            
+            with suppress_output():
+                optimizer = FIRE(atoms, logfile=os.devnull)
+                optimizer.run(
+                    fmax=self.config.relax_fmax,
+                    steps=self.config.relax_max_steps
+                )
+            
+            relaxed_atoms = atoms.copy()
+            energy = atoms.get_potential_energy()
+            
+            # Cleanup
+            del optimizer
+            if hasattr(atoms, 'calc') and atoms.calc is not None:
+                del atoms.calc
+            gc.collect()
+        
+        else:
+            raise ValueError(f"Unknown calculator: {self.calculator_name}")
         
         relax_time = time.time() - relax_start
         
-        relaxed_structure = result['final_structure']
-        relaxed_atoms = relaxed_structure.to_ase_atoms()
-        energy = result['trajectory'].energies[-1]  # Final energy
-        
-        # Cleanup
-        del relaxer
-        del result
-        gc.collect()
+        # Cleanup GPU memory if available
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         
         return relaxed_atoms, energy, relax_time
     
@@ -394,15 +471,13 @@ class Oracle:
         neb_time : float
             NEB calculation time in seconds
         """
-        from chgnet.model.dynamics import CHGNetCalculator
-        
         neb_start = time.time()
         
         n_images = self.config.neb_images
         
         # Attach calculators
-        initial_relaxed.calc = CHGNetCalculator(verbose=False)
-        final_relaxed.calc = CHGNetCalculator(verbose=False)
+        initial_relaxed.calc = self._create_calculator()
+        final_relaxed.calc = self._create_calculator()
         
         # Create image chain
         images = [initial_relaxed]
@@ -414,7 +489,7 @@ class Oracle:
                 fraction = i / (n_images - 1)
                 image.positions = ((1 - fraction) * initial_relaxed.positions +
                                    fraction * final_relaxed.positions)
-                image.calc = CHGNetCalculator(verbose=False)
+                image.calc = self._create_calculator()
                 images.append(image)
         
         images.append(final_relaxed)
@@ -464,10 +539,10 @@ class Oracle:
         Workflow:
         1. Create BCC supercell
         2. Create vacancy at center
-        3. Relax → initial structure
+        3. Relax initial structure
         4. Pick random neighbor
-        5. Move neighbor to vacancy → final structure
-        6. Relax → final structure
+        5. Move neighbor to vacancy ? final structure
+        6. Relax final structure
         7. Run NEB
         8. Save everything
         
@@ -539,8 +614,8 @@ class Oracle:
                 'composition': composition,
                 'composition_string': comp_string,
                 'run_number': run_number,
-                'calculator': 'CHGNet',
-                'model': 'CHGNet-pretrained',
+                'calculator': self.calculator_name,
+                'model': self.model_name,
                 'diffusing_element': diffusing_element,
                 'E_initial_eV': float(E_initial),
                 'E_final_eV': float(E_final),
@@ -571,8 +646,8 @@ class Oracle:
                     row.append(composition.get(elem, 0.0))
                 row.extend([
                     run_number,
-                    'CHGNet',
-                    'CHGNet-pretrained',
+                    self.calculator_name,
+                    self.model_name,
                     diffusing_element,
                     f"{forward_barrier:.6f}",
                     f"{backward_barrier:.6f}",
@@ -587,7 +662,7 @@ class Oracle:
                 ])
                 writer.writerow(row)
             
-            self.logger.info(f"✓ Completed in {total_time:.1f}s")
+            self.logger.info(f"? Completed in {total_time:.1f}s")
             self.logger.info(f"  Diffusing element: {diffusing_element}")
             self.logger.info(f"  Forward barrier: {forward_barrier:.3f} eV")
             self.logger.info(f"  Backward barrier: {backward_barrier:.3f} eV")
@@ -596,17 +671,22 @@ class Oracle:
             return True
             
         except Exception as e:
-            self.logger.error(f"✗ Failed: {e}")
+            self.logger.error(f"? Failed: {e}")
             import traceback
             traceback.print_exc()
             return False
     
     def cleanup(self):
         """
-        Cleanup CHGNet models and GPU memory.
+        Cleanup models and GPU memory.
         Call after completing calculations.
         """
-        self.logger.info("Cleaning up CHGNet models and GPU memory...")
+        self.logger.info("Cleaning up models and GPU memory...")
+        
+        # Cleanup predictor if FAIRChem
+        if self.calculator_name == "fairchem" and self.predictor is not None:
+            del self.predictor
+            self.predictor = None
         
         gc.collect()
         
@@ -614,19 +694,20 @@ class Oracle:
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
         
-        # Clear CHGNet cache if possible
-        try:
-            from chgnet.model import CHGNet
-            if hasattr(CHGNet, '_models'):
-                CHGNet._models.clear()
-        except:
-            pass
+        # Clear CHGNet cache if using CHGNet
+        if self.calculator_name == "chgnet":
+            try:
+                from chgnet.model import CHGNet
+                if hasattr(CHGNet, '_models'):
+                    CHGNet._models.clear()
+            except:
+                pass
         
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         
-        self.logger.info("✓ Cleanup complete")
+        self.logger.info("? Cleanup complete")
     
     def __enter__(self):
         """Context manager entry"""
@@ -651,5 +732,5 @@ if __name__ == "__main__":
     config = Config()
     oracle = Oracle(config)
     
-    print("\n✓ Oracle initialized successfully!")
+    print("\n? Oracle initialized successfully!")
     print("\nTo run actual calculations, use test_oracle.py")
