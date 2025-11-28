@@ -16,9 +16,9 @@ class Config:
     # ============================================================
     # PATHS
     # ============================================================
-    csv_path: str = "MoNbTaWCr.csv"
+    csv_path: str = "MoNbTaW.csv"
     checkpoint_dir: str = "checkpoints"
-    database_dir: str = "MoNbTaWCr"          # Directory for structure files
+    database_dir: str = "MoNbTaW"          # Directory for structure files
     
     # ============================================================
     # CALCULATOR
@@ -28,7 +28,7 @@ class Config:
     # ============================================================
     # MATERIAL SYSTEM (Elements)
     # ============================================================
-    elements: List[str] = field(default_factory=lambda: ['Mo', 'Nb', 'Ta', 'W', 'Cr'])
+    elements: List[str] = field(default_factory=lambda: ['Mo', 'Nb', 'Ta', 'W'])
     
     # ============================================================
     # CRYSTAL STRUCTURE
@@ -118,14 +118,14 @@ class Config:
     # ACTIVE LEARNING
     # ============================================================
     # Initial data generation (Cycle 0)
-    al_initial_samples: int = 500              # Initial random samples before AL starts
+    al_initial_samples: int = 5000              # Initial random samples before AL starts
 
     # Test set generation
-    al_n_test: int = 100                      # Number of test compositions per cycle
+    al_n_test: int = 1000                      # Number of test compositions per cycle
     al_test_strategy: str = 'uniform'         # Test generation strategy: 'uniform', ...
 
     # Query strategy
-    al_n_query: int = 100                      # Number of new training samples per cycle
+    al_n_query: int = 1000                      # Number of new training samples per cycle
     al_query_strategy: str = 'error_weighted' # Query strategy: 'error_weighted', ...
 
     # Active learning loop
@@ -158,7 +158,7 @@ class Config:
     # LOGGING (Weights & Biases)
     # ============================================================
     use_wandb: bool = True                    # Enable/disable wandb
-    wandb_project: str = "GNN_Gym_MoNbTaW_Cr_Meta_test"  # Wandb project name
+    wandb_project: str = "GNN_Gym_MoNbTaW_fairchem"  # Wandb project name
     wandb_entity: str = None                  # Wandb entity (username/team), None = default
     wandb_run_name: str = None                # Run name, None = auto-generated
     wandb_tags: List[str] = field(default_factory=list)  # Tags for the run
