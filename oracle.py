@@ -1,736 +1,308 @@
 """
-Oracle for NEB calculations on BCC structures with vacancies.
+Configuration for Diffusion Barrier Prediction
 
-Handles:
-- BCC supercell creation with arbitrary compositions
-- Vacancy creation and neighbor selection
-- Structure relaxation using CHGNet or FAIRChem
-- NEB calculations
-- Data storage with run numbering per composition
-
-Supports multiple calculators:
-- CHGNet: Pre-trained universal model
-- FAIRChem: UMA models (uma-m-1p1 for best accuracy)
+All settings in one place for easy management.
 """
 
-import os
-import sys
-import csv
-import json
-import time
-import logging
-import numpy as np
-import pandas as pd
+from dataclasses import dataclass, field
+from typing import List
 from datetime import datetime
-from pathlib import Path
-from contextlib import contextmanager
-from ase.io import write
-from ase.build import bulk
-from ase.mep import NEB
-from ase.optimize import FIRE
-import warnings
-import gc
-import torch
-
-warnings.filterwarnings('ignore')
 
 
-@contextmanager
-def suppress_output():
-    """Context manager to suppress stdout/stderr during calculator operations"""
-    with open(os.devnull, 'w') as devnull:
-        old_stdout = sys.stdout
-        old_stderr = sys.stderr
-        sys.stdout = devnull
-        sys.stderr = devnull
-        try:
-            yield
-        finally:
-            sys.stdout = old_stdout
-            sys.stderr = old_stderr
+@dataclass
+class Config:
+    """Complete configuration for the project"""
+    
+    # ============================================================
+    # PATHS
+    # ============================================================
+    csv_path: str = "MoNbTaW.csv"
+    checkpoint_dir: str = "checkpoints"
+    database_dir: str = "MoNbTaW"          # Directory for structure files
+    
+    # ============================================================
+    # CALCULATOR SETTINGS
+    # ============================================================
+    calculator: str = "fairchem"             # Calculator: "chgnet" or "fairchem"
+    
+    # FAIRChem Model Options:
+    # - Universal Materials Accelerator (UMA) - Best for inorganic materials:
+    #   * "uma-s-1p1" - Small, fast
+    #   * "uma-m-1p1" - Medium, balanced (RECOMMENDED for Mo-Nb-Ta-W)
+    #   * "uma-l-1p1" - Large, most accurate
+    # - EquiformerV2 (OC20/OC22):
+    #   * "EquiformerV2-31M-S2EF-OC20-All+MD"
+    #   * "EquiformerV2-153M-S2EF-OC20-All+MD"
+    # - GemNet:
+    #   * "GemNet-OC-S2EFS-OC20+OC22"
+    fairchem_model: str = "uma-m-1p1"        # Model name for FAIRChem
+    
+    # CHGNet settings (if calculator="chgnet")
+    chgnet_model: str = "0.3.0"              # CHGNet version
+    
+    # ============================================================
+    # MATERIAL SYSTEM (Elements)
+    # ============================================================
+    elements: List[str] = field(default_factory=lambda: ['Mo', 'Nb', 'Ta', 'W'])
+    
+    # ============================================================
+    # CRYSTAL STRUCTURE
+    # ============================================================
+    supercell_size: int = 4              # BCC supercell size (4x4x4)
+    lattice_parameter: float = 3.2       # BCC lattice parameter (Angstrom)
+    
+    # ============================================================
+    # GRAPH CONSTRUCTION
+    # ============================================================
+    cutoff_radius: float = 3.5           # Neighbor cutoff radius (Angstrom)
+    max_neighbors: int = 50              # Maximum neighbors per atom
+    
+    # ============================================================
+    # DATA
+    # ============================================================
+    batch_size: int = 32                 # Batch size for training
+    num_workers: int = 0                 # DataLoader workers
+    
+    # Data cleanup (barrier filtering)
+    min_barrier: float = 0.1             # Minimum barrier (eV)
+    max_barrier: float = 5.0             # Maximum barrier (eV)
+    
+    # Train/Val split
+    val_split: float = 0.1               # Validation split ratio (10%)
+    random_seed: int = 42                # Random seed for reproducibility
+    
+    # ============================================================
+    # MODEL ARCHITECTURE
+    # ============================================================
+    # GNN Encoder
+    gnn_hidden_dim: int = 64             # Hidden dimension for GNN layers
+    gnn_num_layers: int = 5              # Number of message passing layers
+    gnn_embedding_dim: int = 64          # Output dimension of GNN encoder
+    
+    # MLP Predictor
+    mlp_hidden_dims: List[int] = field(default_factory=lambda: [1024, 512, 256])
+    dropout: float = 0.1                 # Dropout rate
+    
+    # ============================================================
+    # TRAINING
+    # ============================================================
+    # Optimization
+    learning_rate: float = 1e-3          # Initial learning rate
+    weight_decay: float = 0.01           # L2 regularization (AdamW)
+    gradient_clip_norm: float = 1.0      # Max gradient norm
+    
+    # Training loop
+    epochs: int = 10000                  # Maximum number of epochs
+    patience: int = 120                  # Early stopping patience (epochs)
+    save_interval: int = 50              # Save checkpoint every N epochs
+    
+    # Final model training (after convergence or max cycles)
+    final_model_patience: int = 666      # Higher patience for final model
+    
+    # Learning rate scheduling
+    use_scheduler: bool = True           # Use learning rate scheduler
+    scheduler_type: str = "cosine_warm_restarts"  # Scheduler type
+    scheduler_factor: float = 0.5        # Reduce LR by this factor (plateau, step)
+    scheduler_patience: int = 10         # Patience for LR reduction (plateau)
+    scheduler_step_size: int = 100       # Step size for StepLR (step)
+    scheduler_t_max: int = 100           # T_max for CosineAnnealingLR (cosine)
+    scheduler_eta_min: float = 1e-6      # Minimum LR for CosineAnnealingLR
+    
+    # Cosine Warm Restarts specific
+    scheduler_t_0: int = 100             # First restart period (epochs)
+    scheduler_t_mult: int = 1.2          # Period multiplier
+    scheduler_restart_decay: float = 0.9 # LR decay factor after restart
+    
+    # ============================================================
+    # NEB (Nudged Elastic Band) PARAMETERS
+    # ============================================================
+    neb_images: int = 3                  # Number of images in NEB path
+    neb_spring_constant: float = 5.0     # Spring constant (eV/Angstrom^2)
+    neb_fmax: float = 0.1                # Force convergence criterion (eV/Angstrom)
+    neb_max_steps: int = 500             # Maximum optimization steps
+    neb_climb: bool = True               # Use climbing image NEB
+    neb_method: str = "aseneb"           # NEB method: "aseneb" or "dynneb"
+
+    # ============================================================
+    # STRUCTURE RELAXATION
+    # ============================================================
+    relax_cell: bool = False             # Allow cell relaxation
+    relax_fmax: float = 0.1              # Force convergence (eV/Angstrom)
+    relax_steps: int = 500               # Maximum relaxation steps
+    relax_max_steps: int = 500           # Maximum relaxation steps (alias)
+    
+    # ============================================================
+    # ACTIVE LEARNING
+    # ============================================================
+    # Initial data generation (Cycle 0)
+    al_initial_samples: int = 5000       # Initial random samples before AL starts
+
+    # Test set generation
+    al_n_test: int = 1000                # Number of test compositions per cycle
+    al_test_strategy: str = 'uniform'    # Test generation strategy
+
+    # Query strategy
+    al_n_query: int = 1000               # Number of new training samples per cycle
+    al_query_strategy: str = 'error_weighted'  # Query strategy
+
+    # Active learning loop
+    al_max_cycles: int = 20              # Maximum number of AL cycles
+    al_seed: int = 42                    # Random seed for AL
+
+    # Convergence criteria
+    al_convergence_check: bool = True                    # Enable convergence checking
+    al_convergence_metric: str = "mae"                   # Metric: "mae" or "rel_mae"
+    al_convergence_threshold_mae: float = 0.01           # MAE threshold (eV)
+    al_convergence_threshold_rel_mae: float = 0.1        # Relative MAE threshold
+    al_convergence_patience: int = 20                    # Cycles without improvement
+
+    # Output
+    al_results_dir: str = "active_learning_results"  # Directory for AL results
+    
+    # ============================================================
+    # LOGGING (File Logging)
+    # ============================================================
+    log_dir: str = "logs"                # Directory for log files
+    log_level: str = "INFO"              # Logging level
+    log_to_console: bool = True          # Also print to console
+    
+    # ============================================================
+    # LOSS FUNCTION
+    # ============================================================
+    loss_function: str = "mse"           # Loss: "mse", "mae", "huber", "smooth_l1"
+    
+    # ============================================================
+    # LOGGING (Weights & Biases)
+    # ============================================================
+    use_wandb: bool = True                                    # Enable/disable wandb
+    wandb_project: str = "GNN_Gym_MoNbTaW_fairchem"          # Wandb project name
+    wandb_entity: str = None                                  # Wandb entity
+    wandb_run_name: str = None                                # Run name
+    wandb_tags: List[str] = field(default_factory=list)      # Tags
+    wandb_notes: str = "FAIRChem UMA-m-1p1 test for Mo-Nb-Ta-W"  # Notes
+    wandb_log_interval: int = 1                               # Log every N epochs
+    wandb_watch_model: bool = True                            # Watch model gradients
+    wandb_watch_freq: int = 10                                # Watch frequency
+    
+    def get_model_name(self, n_samples: int = None, cycle: int = None) -> str:
+        """Generate a descriptive model name based on configuration."""
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        mlp_str = "-".join(map(str, self.mlp_hidden_dims))
+        scheduler = self.scheduler_type if self.use_scheduler else "none"
+        
+        parts = [timestamp]
+        
+        if n_samples is not None:
+            parts.append(f"samples{n_samples}")
+        
+        if cycle is not None:
+            parts.append(f"cycle{cycle}")
+        
+        parts.append(f"GNN-{self.gnn_num_layers}x{self.gnn_hidden_dim}")
+        parts.append(f"MLP-{mlp_str}")
+        parts.append(scheduler)
+        
+        return "-".join(parts)
+    
+    def get_experiment_name(self, n_samples: int = None, cycle: int = None) -> str:
+        """Generate experiment name for wandb with timestamp, dataset size, and cycle."""
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        parts = [timestamp]
+        
+        if n_samples is not None:
+            parts.append(f"samples{n_samples}")
+        
+        if cycle is not None:
+            parts.append(f"cycle{cycle}")
+        
+        parts.append("GNN")
+        
+        return "-".join(parts)
 
 
-class Oracle:
-    """
-    Oracle for vacancy diffusion NEB calculations.
-    
-    Workflow:
-    1. Create BCC supercell with random element distribution
-    2. Create vacancy at center
-    3. Relax initial structure
-    4. Pick random neighbor, move to vacancy
-    5. Relax final structure
-    6. Run NEB between initial and final
-    7. Save everything (structures, energies, barriers)
-    """
-    
-    def __init__(self, config):
-        """
-        Initialize Oracle.
-        
-        Parameters:
-        -----------
-        config : Config
-            Configuration object with all parameters
-        """
-        self.config = config
-        self.database_dir = Path(config.database_dir)
-        self.csv_path = Path(config.csv_path)
-        
-        # Setup logger
-        log_file = Path(config.log_dir) / "oracle.log"
-        self.logger = self._setup_logger(log_file, config.log_level, config.log_to_console)
-        
-        # Create database directory
-        self.database_dir.mkdir(exist_ok=True)
-        
-        # Initialize CSV if needed
-        self._init_csv()
-        
-        # Initialize calculator-specific components
-        self.calculator_name = config.calculator
-        self._init_calculator()
-        
-        self.logger.info("Oracle initialized")
-        self.logger.info(f"  Database: {self.database_dir}")
-        self.logger.info(f"  CSV: {self.csv_path}")
-        self.logger.info(f"  Calculator: {self.calculator_name}")
-    
-    def _setup_logger(self, log_file: Path, level: str = "INFO", also_console: bool = True):
-        """Setup logger for Oracle."""
-        logger = logging.getLogger("oracle")
-        logger.setLevel(getattr(logging, level.upper()))
-        logger.handlers = []  # Clear existing handlers
-        
-        # File handler
-        log_file.parent.mkdir(parents=True, exist_ok=True)
-        fh = logging.FileHandler(log_file)
-        fh.setLevel(getattr(logging, level.upper()))
-        
-        # Console handler (optional)
-        if also_console:
-            ch = logging.StreamHandler()
-            ch.setLevel(getattr(logging, level.upper()))
-        
-        # Formatter
-        formatter = logging.Formatter(
-            '%(asctime)s | %(levelname)-8s | %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
-        fh.setFormatter(formatter)
-        if also_console:
-            ch.setFormatter(formatter)
-        
-        # Add handlers
-        logger.addHandler(fh)
-        if also_console:
-            logger.addHandler(ch)
-        
-        return logger
-    
-    def _init_calculator(self):
-        """
-        Initialize calculator-specific components.
-        Sets up model name and predictor for FAIRChem if needed.
-        """
-        if self.calculator_name == "chgnet":
-            self.model_name = "CHGNet-pretrained"
-            self.predictor = None  # CHGNet doesn't use a separate predictor
-        elif self.calculator_name == "fairchem":
-            self.model_name = "UMA-m-1p1"
-            # Initialize FAIRChem predictor once (reused for all calculations)
-            from fairchem.core import pretrained_mlip
-            with suppress_output():
-                self.predictor = pretrained_mlip.get_predict_unit("uma-m-1p1", device="cuda")
-            self.logger.info(f"  FAIRChem predictor loaded: uma-m-1p1")
-        else:
-            raise ValueError(f"Unknown calculator: {self.calculator_name}")
-    
-    def _create_calculator(self):
-        """
-        Create calculator instance.
-        
-        Returns:
-        --------
-        calculator : ASE Calculator
-            Configured calculator (CHGNet or FAIRChem)
-        """
-        if self.calculator_name == "chgnet":
-            from chgnet.model.dynamics import CHGNetCalculator
-            return CHGNetCalculator(verbose=False)
-        
-        elif self.calculator_name == "fairchem":
-            from fairchem.core import FAIRChemCalculator
-            # Use pre-initialized predictor
-            return FAIRChemCalculator(self.predictor, task_name="omat")
-        
-        else:
-            raise ValueError(f"Unknown calculator: {self.calculator_name}")
-    
-    def _init_csv(self):
-        """Initialize CSV with headers if it doesn't exist"""
-        if not self.csv_path.exists():
-            # Build header dynamically based on elements
-            header = ['composition_string']
-            header.extend(self.config.elements)  # Add element columns
-            header.extend([
-                'run_number',
-                'calculator',
-                'model',
-                'diffusing_element',
-                'forward_barrier_eV',
-                'backward_barrier_eV',
-                'E_initial_eV',
-                'E_final_eV',
-                'initial_relax_time_s',
-                'final_relax_time_s',
-                'neb_time_s',
-                'total_time_s',
-                'structure_folder',
-                'timestamp'
-            ])
-            
-            with open(self.csv_path, 'w', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow(header)
-    
-    def _composition_to_string(self, composition: dict) -> str:
-        """
-        Convert composition dict to string like 'Mo25Nb25Ta25W25'.
-        
-        Parameters:
-        -----------
-        composition : dict
-            Element composition, e.g., {'Mo': 0.25, 'Nb': 0.25, 'Ta': 0.25, 'W': 0.25}
-        
-        Returns:
-        --------
-        comp_str : str
-            Composition string
-        """
-        sorted_items = sorted(composition.items())
-        comp_str = ""
-        for element, fraction in sorted_items:
-            percentage = int(round(fraction * 100))
-            comp_str += f"{element}{percentage}"
-        return comp_str
-    
-    def _get_next_run_number(self, composition_string: str) -> int:
-        """
-        Get next run number for a given composition.
-        Run numbers start at 1 and increment for each composition independently.
-        
-        Parameters:
-        -----------
-        composition_string : str
-            Composition string (e.g., 'Mo25Nb25Ta25W25')
-        
-        Returns:
-        --------
-        run_number : int
-            Next available run number for this composition
-        """
-        if not self.csv_path.exists():
-            return 1
-        
-        df = pd.read_csv(self.csv_path)
-        
-        # Filter for this composition
-        comp_df = df[df['composition_string'] == composition_string]
-        
-        if len(comp_df) == 0:
-            return 1
-        
-        return int(comp_df['run_number'].max()) + 1
-    
-    def _create_bcc_supercell(self, composition: dict):
-        """
-        Create BCC supercell with random element distribution.
-        
-        Parameters:
-        -----------
-        composition : dict
-            Element composition, e.g., {'Mo': 0.25, 'Nb': 0.25, 'Ta': 0.25, 'W': 0.25}
-        
-        Returns:
-        --------
-        supercell : ase.Atoms
-            BCC supercell with random element distribution
-        """
-        size = self.config.supercell_size
-        lattice_param = self.config.lattice_parameter
-        
-        # Create BCC supercell (using Fe as template, will replace atoms)
-        crystal = bulk('Fe', crystalstructure='bcc', a=lattice_param, cubic=True)
-        supercell = crystal.repeat([size, size, size])
-        
-        # Get total number of atoms
-        total_atoms = len(supercell)
-        
-        # Convert composition to atom counts
-        elements = []
-        for element, fraction in sorted(composition.items()):
-            count = int(round(fraction * total_atoms))
-            elements.extend([element] * count)
-        
-        # Adjust for rounding errors
-        while len(elements) < total_atoms:
-            elements.append(list(composition.keys())[0])
-        while len(elements) > total_atoms:
-            elements.pop()
-        
-        # Randomly shuffle element assignment
-        np.random.shuffle(elements)
-        
-        # Assign elements to atoms
-        supercell.set_chemical_symbols(elements)
-        
-        return supercell
-    
-    def _create_vacancy_at_center(self, structure):
-        """
-        Create vacancy by removing atom closest to center.
-        
-        Parameters:
-        -----------
-        structure : ase.Atoms
-            Structure to create vacancy in
-        
-        Returns:
-        --------
-        structure_with_vacancy : ase.Atoms
-            Structure with vacancy
-        center_index : int
-            Index of removed atom (in original structure)
-        center_position : np.ndarray
-            Position of the vacancy (center position)
-        """
-        structure = structure.copy()
-        
-        # Calculate center position
-        cell = structure.cell
-        supercell_center = np.diagonal(cell) / 2.0
-        
-        # Find closest atom to center
-        positions = structure.positions
-        distances = []
-        for pos in positions:
-            diff = pos - supercell_center
-            # Apply minimum image convention
-            for i in range(3):
-                while diff[i] > cell[i, i] / 2:
-                    diff[i] -= cell[i, i]
-                while diff[i] < -cell[i, i] / 2:
-                    diff[i] += cell[i, i]
-            distances.append(np.linalg.norm(diff))
-        
-        center_index = np.argmin(distances)
-        center_position = positions[center_index].copy()
-        
-        # Remove center atom
-        del structure[center_index]
-        
-        return structure, center_index, center_position
-    
-    def _get_nearest_neighbors(self, structure, reference_position: np.ndarray, n_neighbors: int = 8):
-        """
-        Get n nearest neighbors to a reference position.
-        
-        Parameters:
-        -----------
-        structure : ase.Atoms
-            Structure to search in
-        reference_position : np.ndarray
-            Position to find neighbors around
-        n_neighbors : int
-            Number of neighbors to return
-        
-        Returns:
-        --------
-        neighbor_indices : list
-            Indices of nearest neighbors
-        """
-        cell = structure.cell
-        positions = structure.positions
-        
-        distances_and_indices = []
-        
-        for i, pos in enumerate(positions):
-            diff = pos - reference_position
-            # Apply minimum image convention
-            for j in range(3):
-                while diff[j] > cell[j, j] / 2:
-                    diff[j] -= cell[j, j]
-                while diff[j] < -cell[j, j] / 2:
-                    diff[j] += cell[j, j]
-            
-            distance = np.linalg.norm(diff)
-            distances_and_indices.append((distance, i))
-        
-        # Sort by distance and return nearest n
-        distances_and_indices.sort()
-        neighbor_indices = [idx for _, idx in distances_and_indices[:n_neighbors]]
-        
-        return neighbor_indices
-    
-    def _relax_structure(self, atoms):
-        """
-        Relax structure using configured calculator (SILENT MODE).
-        
-        Parameters:
-        -----------
-        atoms : ase.Atoms
-            Structure to relax
-        
-        Returns:
-        --------
-        relaxed_atoms : ase.Atoms
-            Relaxed structure
-        energy : float
-            Final energy in eV
-        relax_time : float
-            Relaxation time in seconds
-        """
-        relax_start = time.time()
-        
-        if self.calculator_name == "chgnet":
-            # CHGNet uses StructOptimizer
-            from chgnet.model.dynamics import StructOptimizer
-            
-            with suppress_output():
-                relaxer = StructOptimizer()
-                result = relaxer.relax(
-                    atoms,
-                    relax_cell=self.config.relax_cell,
-                    fmax=self.config.relax_fmax,
-                    steps=self.config.relax_max_steps,
-                    verbose=False
-                )
-            
-            relaxed_structure = result['final_structure']
-            relaxed_atoms = relaxed_structure.to_ase_atoms()
-            energy = result['trajectory'].energies[-1]  # Final energy
-            
-            # Cleanup
-            del relaxer
-            del result
-            gc.collect()
-        
-        elif self.calculator_name == "fairchem":
-            # FAIRChem uses standard ASE optimization
-            atoms.calc = self._create_calculator()
-            
-            with suppress_output():
-                optimizer = FIRE(atoms, logfile=os.devnull)
-                optimizer.run(
-                    fmax=self.config.relax_fmax,
-                    steps=self.config.relax_max_steps
-                )
-            
-            relaxed_atoms = atoms.copy()
-            energy = atoms.get_potential_energy()
-            
-            # Cleanup
-            del optimizer
-            if hasattr(atoms, 'calc') and atoms.calc is not None:
-                del atoms.calc
-            gc.collect()
-        
-        else:
-            raise ValueError(f"Unknown calculator: {self.calculator_name}")
-        
-        relax_time = time.time() - relax_start
-        
-        # Cleanup GPU memory if available
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        
-        return relaxed_atoms, energy, relax_time
-    
-    def _run_neb(self, initial_relaxed, final_relaxed):
-        """
-        Run NEB calculation between initial and final structures (SILENT MODE).
-        
-        Parameters:
-        -----------
-        initial_relaxed : ase.Atoms
-            Initial relaxed structure
-        final_relaxed : ase.Atoms
-            Final relaxed structure
-        
-        Returns:
-        --------
-        forward_barrier : float
-            Forward energy barrier (eV)
-        backward_barrier : float
-            Backward energy barrier (eV)
-        neb_energies : list
-            Energies of all NEB images (eV)
-        images : list
-            All NEB images (ase.Atoms objects)
-        neb_time : float
-            NEB calculation time in seconds
-        """
-        neb_start = time.time()
-        
-        n_images = self.config.neb_images
-        
-        # Attach calculators
-        initial_relaxed.calc = self._create_calculator()
-        final_relaxed.calc = self._create_calculator()
-        
-        # Create image chain
-        images = [initial_relaxed]
-        
-        with suppress_output():
-            # Create intermediate images by linear interpolation
-            for i in range(1, n_images - 1):
-                image = initial_relaxed.copy()
-                fraction = i / (n_images - 1)
-                image.positions = ((1 - fraction) * initial_relaxed.positions +
-                                   fraction * final_relaxed.positions)
-                image.calc = self._create_calculator()
-                images.append(image)
-        
-        images.append(final_relaxed)
-        
-        # Run NEB (SILENT)
-        with suppress_output():
-            neb = NEB(
-                images,
-                k=self.config.neb_spring_constant,
-                climb=self.config.neb_climb
-            )
-            optimizer = FIRE(neb, logfile=os.devnull)
-            optimizer.run(
-                fmax=self.config.neb_fmax,
-                steps=self.config.neb_max_steps
-            )
-        
-        neb_time = time.time() - neb_start
-        
-        # Calculate energies and barriers
-        neb_energies = [img.get_potential_energy() for img in images]
-        max_energy = max(neb_energies)
-        forward_barrier = max_energy - neb_energies[0]
-        backward_barrier = max_energy - neb_energies[-1]
-        
-        # Store images for return (before cleanup)
-        images_copy = [img.copy() for img in images]
-        
-        # Cleanup
-        for img in images:
-            if hasattr(img, 'calc') and img.calc is not None:
-                del img.calc
-        
-        del neb
-        del optimizer
-        del images
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        
-        return forward_barrier, backward_barrier, neb_energies, images_copy, neb_time
-    
-    def calculate(self, composition: dict):
-        """
-        Calculate NEB barrier for given composition.
-        
-        Workflow:
-        1. Create BCC supercell
-        2. Create vacancy at center
-        3. Relax initial structure
-        4. Pick random neighbor
-        5. Move neighbor to vacancy ? final structure
-        6. Relax final structure
-        7. Run NEB
-        8. Save everything
-        
-        Parameters:
-        -----------
-        composition : dict
-            Element composition, e.g., {'Mo': 0.25, 'Nb': 0.25, 'Ta': 0.25, 'W': 0.25}
-        
-        Returns:
-        --------
-        success : bool
-            True if calculation successful
-        """
-        calc_start = time.time()
-        
-        comp_string = self._composition_to_string(composition)
-        run_number = self._get_next_run_number(comp_string)
-        
-        self.logger.info(f"Calculating {comp_string} (run {run_number})...")
-        
-        try:
-            # 1. Generate BCC structure
-            structure = self._create_bcc_supercell(composition)
-            
-            # 2. Create vacancy at center
-            initial_unrelaxed, center_idx, center_pos = self._create_vacancy_at_center(structure)
-            
-            # 3. Relax initial structure
-            initial_relaxed, E_initial, initial_relax_time = self._relax_structure(initial_unrelaxed.copy())
-            
-            # 4. Pick random neighbor
-            neighbors = self._get_nearest_neighbors(initial_unrelaxed, center_pos, n_neighbors=8)
-            chosen_neighbor = np.random.choice(neighbors)
-            
-            # Get the element of the diffusing atom
-            diffusing_element = initial_unrelaxed.get_chemical_symbols()[chosen_neighbor]
-            
-            # 5. Create final structure (neighbor jumps to vacancy)
-            final_unrelaxed = initial_unrelaxed.copy()
-            final_unrelaxed.positions[chosen_neighbor] = center_pos
-            
-            # 6. Relax final structure
-            final_relaxed, E_final, final_relax_time = self._relax_structure(final_unrelaxed.copy())
-            
-            # 7. Run NEB
-            forward_barrier, backward_barrier, neb_energies, neb_images, neb_time = self._run_neb(
-                initial_relaxed.copy(),
-                final_relaxed.copy()
-            )
-            
-            total_time = time.time() - calc_start
-            
-            # 8. Save everything
-            run_dir = self.database_dir / comp_string / f"run_{run_number}"
-            run_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Save structures
-            write(run_dir / "initial_unrelaxed.cif", initial_unrelaxed)
-            write(run_dir / "initial_relaxed.cif", initial_relaxed)
-            write(run_dir / "final_unrelaxed.cif", final_unrelaxed)
-            write(run_dir / "final_relaxed.cif", final_relaxed)
-            
-            # Save NEB images
-            for i, img in enumerate(neb_images):
-                write(run_dir / f"neb_image_{i}.cif", img)
-            
-            # Save results.json
-            results = {
-                'composition': composition,
-                'composition_string': comp_string,
-                'run_number': run_number,
-                'calculator': self.calculator_name,
-                'model': self.model_name,
-                'diffusing_element': diffusing_element,
-                'E_initial_eV': float(E_initial),
-                'E_final_eV': float(E_final),
-                'forward_barrier_eV': float(forward_barrier),
-                'backward_barrier_eV': float(backward_barrier),
-                'neb_energies_eV': [float(e) for e in neb_energies],
-                'neb_converged': True,
-                'timing': {
-                    'initial_relax_s': float(initial_relax_time),
-                    'final_relax_s': float(final_relax_time),
-                    'neb_s': float(neb_time),
-                    'total_s': float(total_time)
-                },
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            }
-            
-            with open(run_dir / "results.json", 'w') as f:
-                json.dump(results, f, indent=2)
-            
-            # Append to CSV
-            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
-            with open(self.csv_path, 'a', newline='') as f:
-                writer = csv.writer(f)
-                row = [comp_string]
-                # Add element fractions in order
-                for elem in self.config.elements:
-                    row.append(composition.get(elem, 0.0))
-                row.extend([
-                    run_number,
-                    self.calculator_name,
-                    self.model_name,
-                    diffusing_element,
-                    f"{forward_barrier:.6f}",
-                    f"{backward_barrier:.6f}",
-                    f"{E_initial:.6f}",
-                    f"{E_final:.6f}",
-                    f"{initial_relax_time:.2f}",
-                    f"{final_relax_time:.2f}",
-                    f"{neb_time:.2f}",
-                    f"{total_time:.2f}",
-                    str(run_dir),
-                    timestamp
-                ])
-                writer.writerow(row)
-            
-            self.logger.info(f"? Completed in {total_time:.1f}s")
-            self.logger.info(f"  Diffusing element: {diffusing_element}")
-            self.logger.info(f"  Forward barrier: {forward_barrier:.3f} eV")
-            self.logger.info(f"  Backward barrier: {backward_barrier:.3f} eV")
-            self.logger.info(f"  Timing: relax={initial_relax_time+final_relax_time:.1f}s, neb={neb_time:.1f}s")
-            
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"? Failed: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
-    
-    def cleanup(self):
-        """
-        Cleanup models and GPU memory.
-        Call after completing calculations.
-        """
-        self.logger.info("Cleaning up models and GPU memory...")
-        
-        # Cleanup predictor if FAIRChem
-        if self.calculator_name == "fairchem" and self.predictor is not None:
-            del self.predictor
-            self.predictor = None
-        
-        gc.collect()
-        
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            torch.cuda.synchronize()
-        
-        # Clear CHGNet cache if using CHGNet
-        if self.calculator_name == "chgnet":
-            try:
-                from chgnet.model import CHGNet
-                if hasattr(CHGNet, '_models'):
-                    CHGNet._models.clear()
-            except:
-                pass
-        
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        
-        self.logger.info("? Cleanup complete")
-    
-    def __enter__(self):
-        """Context manager entry"""
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit - cleanup automatically"""
-        self.cleanup()
-        return False
-
-
+# Display config
 if __name__ == "__main__":
-    from config import Config
-    
     print("="*70)
-    print("ORACLE TEST")
+    print("DEFAULT CONFIGURATION")
     print("="*70)
-    
-    # This is just to show the structure
-    # Don't run actual calculations here - use test_oracle.py instead
     
     config = Config()
-    oracle = Oracle(config)
     
-    print("\n? Oracle initialized successfully!")
-    print("\nTo run actual calculations, use test_oracle.py")
+    print("\nPATHS:")
+    print(f"  csv_path: {config.csv_path}")
+    print(f"  checkpoint_dir: {config.checkpoint_dir}")
+    print(f"  database_dir: {config.database_dir}")
+    
+    print("\nCALCULATOR:")
+    print(f"  calculator: {config.calculator}")
+    if config.calculator == "fairchem":
+        print(f"  fairchem_model: {config.fairchem_model}")
+    elif config.calculator == "chgnet":
+        print(f"  chgnet_model: {config.chgnet_model}")
+    
+    print("\nMATERIAL SYSTEM:")
+    print(f"  elements: {config.elements}")
+    
+    print("\nCRYSTAL STRUCTURE:")
+    print(f"  supercell_size: {config.supercell_size}")
+    print(f"  lattice_parameter: {config.lattice_parameter}")
+    
+    print("\nSTRUCTURE RELAXATION:")
+    print(f"  relax_cell: {config.relax_cell}")
+    print(f"  relax_fmax: {config.relax_fmax} eV/Å")
+    print(f"  relax_steps: {config.relax_steps}")
+    
+    print("\nGRAPH CONSTRUCTION:")
+    print(f"  cutoff_radius: {config.cutoff_radius}")
+    print(f"  max_neighbors: {config.max_neighbors}")
+    
+    print("\nDATA:")
+    print(f"  batch_size: {config.batch_size}")
+    print(f"  min_barrier: {config.min_barrier} eV")
+    print(f"  max_barrier: {config.max_barrier} eV")
+    print(f"  val_split: {config.val_split}")
+    print(f"  random_seed: {config.random_seed}")
+    
+    print("\nMODEL ARCHITECTURE:")
+    print(f"  gnn_hidden_dim: {config.gnn_hidden_dim}")
+    print(f"  gnn_num_layers: {config.gnn_num_layers}")
+    print(f"  gnn_embedding_dim: {config.gnn_embedding_dim}")
+    print(f"  mlp_hidden_dims: {config.mlp_hidden_dims}")
+    print(f"  dropout: {config.dropout}")
+    
+    print("\nTRAINING:")
+    print(f"  learning_rate: {config.learning_rate}")
+    print(f"  weight_decay: {config.weight_decay}")
+    print(f"  gradient_clip_norm: {config.gradient_clip_norm}")
+    print(f"  epochs: {config.epochs}")
+    print(f"  patience: {config.patience}")
+    print(f"  final_model_patience: {config.final_model_patience}")
+    print(f"  save_interval: {config.save_interval}")
+    
+    print("\nLEARNING RATE SCHEDULER:")
+    print(f"  use_scheduler: {config.use_scheduler}")
+    print(f"  scheduler_type: {config.scheduler_type}")
+    
+    print("\nNEB PARAMETERS:")
+    print(f"  neb_images: {config.neb_images}")
+    print(f"  neb_spring_constant: {config.neb_spring_constant} eV/Å²")
+    print(f"  neb_fmax: {config.neb_fmax} eV/Å")
+    print(f"  neb_max_steps: {config.neb_max_steps}")
+    print(f"  neb_climb: {config.neb_climb}")
+    print(f"  neb_method: {config.neb_method}")
+    
+    print("\nACTIVE LEARNING:")
+    print(f"  al_initial_samples: {config.al_initial_samples}")
+    print(f"  al_n_test: {config.al_n_test}")
+    print(f"  al_test_strategy: {config.al_test_strategy}")
+    print(f"  al_n_query: {config.al_n_query}")
+    print(f"  al_query_strategy: {config.al_query_strategy}")
+    print(f"  al_max_cycles: {config.al_max_cycles}")
+    
+    print("\nCONVERGENCE CRITERIA:")
+    print(f"  al_convergence_check: {config.al_convergence_check}")
+    print(f"  al_convergence_metric: {config.al_convergence_metric}")
+    print(f"  al_convergence_threshold_mae: {config.al_convergence_threshold_mae} eV")
+    print(f"  al_convergence_patience: {config.al_convergence_patience} cycles")
+    
+    print("\n" + "="*70)
