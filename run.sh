@@ -19,7 +19,7 @@ cd $SLURM_SUBMIT_DIR
 
 # Activate conda/mamba
 source /mulfs/home/p2467946/mambaforge/etc/profile.d/conda.sh
-conda activate wandb
+conda activate wandb-stable
 
 # Run the active learning script
 srun -n1 -c16 -G1 python xxx_active_learning_loop_xxx.py

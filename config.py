@@ -21,9 +21,24 @@ class Config:
     database_dir: str = "MoNbTaW"          # Directory for structure files
     
     # ============================================================
-    # CALCULATOR
+    # CALCULATOR SETTINGS
     # ============================================================
     calculator: str = "fairchem"             # Calculator: "chgnet" or "fairchem"
+    
+    # FAIRChem Model Options:
+    # - Universal Materials Accelerator (UMA) - Best for inorganic materials:
+    #   * "uma-s-1p1" - Small, fast
+    #   * "uma-m-1p1" - Medium, balanced (RECOMMENDED for Mo-Nb-Ta-W)
+    #   * "uma-l-1p1" - Large, most accurate
+    # - EquiformerV2 (OC20/OC22):
+    #   * "EquiformerV2-31M-S2EF-OC20-All+MD"
+    #   * "EquiformerV2-153M-S2EF-OC20-All+MD"
+    # - GemNet:
+    #   * "GemNet-OC-S2EFS-OC20+OC22"
+    fairchem_model: str = "uma-m-1p1"        # Model name for FAIRChem
+    
+    # CHGNet settings (if calculator="chgnet")
+    chgnet_model: str = "0.3.0"              # CHGNet version
     
     # ============================================================
     # MATERIAL SYSTEM (Elements)
@@ -46,11 +61,11 @@ class Config:
     # DATA
     # ============================================================
     batch_size: int = 32                 # Batch size for training
-    num_workers: int = 0                 # DataLoader
+    num_workers: int = 0                 # DataLoader workers
     
     # Data cleanup (barrier filtering)
-    min_barrier: float = 0.1             # Minimum barrier (eV)
-    max_barrier: float = 5.0            # Maximum barrier (eV)
+    min_barrier: float = 0.0             # Minimum barrier (eV)
+    max_barrier: float = 50.0             # Maximum barrier (eV)
     
     # Train/Val split
     val_split: float = 0.1               # Validation split ratio (10%)
@@ -66,7 +81,7 @@ class Config:
     
     # MLP Predictor
     mlp_hidden_dims: List[int] = field(default_factory=lambda: [1024, 512, 256])
-    dropout: float = 0.1                # Dropout rate
+    dropout: float = 0.1                 # Dropout rate
     
     # ============================================================
     # TRAINING
@@ -77,8 +92,8 @@ class Config:
     gradient_clip_norm: float = 1.0      # Max gradient norm
     
     # Training loop
-    epochs: int = 10000                   # Maximum number of epochs
-    patience: int = 120                   # Early stopping patience (epochs)
+    epochs: int = 10000                  # Maximum number of epochs
+    patience: int = 120                  # Early stopping patience (epochs)
     save_interval: int = 50              # Save checkpoint every N epochs
     
     # Final model training (after convergence or max cycles)
@@ -86,58 +101,60 @@ class Config:
     
     # Learning rate scheduling
     use_scheduler: bool = True           # Use learning rate scheduler
-    scheduler_type: str = "cosine_warm_restarts"  # Scheduler type: "plateau", "cosine", "cosine_warm_restarts", "step", or "none"
+    scheduler_type: str = "cosine_warm_restarts"  # Scheduler type
     scheduler_factor: float = 0.5        # Reduce LR by this factor (plateau, step)
     scheduler_patience: int = 10         # Patience for LR reduction (plateau)
     scheduler_step_size: int = 100       # Step size for StepLR (step)
     scheduler_t_max: int = 100           # T_max for CosineAnnealingLR (cosine)
-    scheduler_eta_min: float = 1e-6      # Minimum LR for CosineAnnealingLR (cosine, cosine_warm_restarts)
+    scheduler_eta_min: float = 1e-6      # Minimum LR for CosineAnnealingLR
     
     # Cosine Warm Restarts specific
     scheduler_t_0: int = 100             # First restart period (epochs)
-    scheduler_t_mult: int = 1.2            # Period multiplier (each restart is T_mult times longer)
-    scheduler_restart_decay: float = 0.9 # LR decay factor after restart (< 1: decay, = 1: constant, > 1: amplification)
+    scheduler_t_mult: int = 1.2          # Period multiplier
+    scheduler_restart_decay: float = 0.9 # LR decay factor after restart
     
     # ============================================================
     # NEB (Nudged Elastic Band) PARAMETERS
     # ============================================================
-    neb_images: int = 3                # Number of images in NEB path
-    neb_spring_constant: float = 5.0     # Spring constant for NEB (eV/Angstrom^2)
-    neb_fmax: float = 0.1               # Force convergence criterion (eV/Angstrom)
+    neb_images: int = 3                  # Number of images in NEB path
+    neb_spring_constant: float = 5.0     # Spring constant (eV/Angstrom^2)
+    neb_fmax: float = 0.1                # Force convergence criterion (eV/Angstrom)
     neb_max_steps: int = 500             # Maximum optimization steps
     neb_climb: bool = True               # Use climbing image NEB
     neb_method: str = "aseneb"           # NEB method: "aseneb" or "dynneb"
 
+    # ============================================================
     # STRUCTURE RELAXATION
-    relax_cell: bool = False              # Allow cell relaxation
-    relax_fmax: float = 0.1              # Force convergence for relaxation (eV/Angstrom)
+    # ============================================================
+    relax_cell: bool = False             # Allow cell relaxation
+    relax_fmax: float = 0.1              # Force convergence (eV/Angstrom)
     relax_steps: int = 500               # Maximum relaxation steps
-    relax_max_steps: int = 500           # Maximum relaxation steps (alias for compatibility)
+    relax_max_steps: int = 500           # Maximum relaxation steps (alias)
     
     # ============================================================
     # ACTIVE LEARNING
     # ============================================================
     # Initial data generation (Cycle 0)
-    al_initial_samples: int = 5000              # Initial random samples before AL starts
+    al_initial_samples: int = 5000       # Initial random samples before AL starts
 
     # Test set generation
-    al_n_test: int = 1000                      # Number of test compositions per cycle
-    al_test_strategy: str = 'uniform'         # Test generation strategy: 'uniform', ...
+    al_n_test: int = 1000                # Number of test compositions per cycle
+    al_test_strategy: str = 'uniform'    # Test generation strategy
 
     # Query strategy
-    al_n_query: int = 1000                      # Number of new training samples per cycle
-    al_query_strategy: str = 'error_weighted' # Query strategy: 'error_weighted', ...
+    al_n_query: int = 1000               # Number of new training samples per cycle
+    al_query_strategy: str = 'error_weighted'  # Query strategy
 
     # Active learning loop
-    al_max_cycles: int = 20                  # Maximum number of AL cycles
-    al_seed: int = 42                         # Random seed for AL (gets incremented per cycle)
+    al_max_cycles: int = 20              # Maximum number of AL cycles
+    al_seed: int = 42                    # Random seed for AL
 
     # Convergence criteria
     al_convergence_check: bool = True                    # Enable convergence checking
     al_convergence_metric: str = "mae"                   # Metric: "mae" or "rel_mae"
     al_convergence_threshold_mae: float = 0.01           # MAE threshold (eV)
-    al_convergence_threshold_rel_mae: float = 0.1       # Relative MAE threshold (10%)
-    al_convergence_patience: int = 20                     # Cycles without improvement before stopping
+    al_convergence_threshold_rel_mae: float = 0.1        # Relative MAE threshold
+    al_convergence_patience: int = 20                    # Cycles without improvement
 
     # Output
     al_results_dir: str = "active_learning_results"  # Directory for AL results
@@ -145,89 +162,50 @@ class Config:
     # ============================================================
     # LOGGING (File Logging)
     # ============================================================
-    log_dir: str = "logs"                        # Directory for log files
-    log_level: str = "INFO"                      # Logging level: DEBUG, INFO, WARNING, ERROR
-    log_to_console: bool = True                  # Also print to console
+    log_dir: str = "logs"                # Directory for log files
+    log_level: str = "INFO"              # Logging level
+    log_to_console: bool = True          # Also print to console
     
     # ============================================================
     # LOSS FUNCTION
     # ============================================================
-    loss_function: str = "mse"                   # Loss function: "mse", "mae", "huber", "smooth_l1"
+    loss_function: str = "mse"           # Loss: "mse", "mae", "huber", "smooth_l1"
     
     # ============================================================
     # LOGGING (Weights & Biases)
     # ============================================================
-    use_wandb: bool = True                    # Enable/disable wandb
-    wandb_project: str = "GNN_Gym_MoNbTaW_fairchem"  # Wandb project name
-    wandb_entity: str = None                  # Wandb entity (username/team), None = default
-    wandb_run_name: str = None                # Run name, None = auto-generated
-    wandb_tags: List[str] = field(default_factory=list)  # Tags for the run
-    wandb_notes: str = "First full test to check if convergence is possible"                     # Notes for the run
-    wandb_log_interval: int = 1               # Log every N epochs
-    wandb_watch_model: bool = True            # Watch model gradients
-    wandb_watch_freq: int = 10               # Watch frequency (batches)
+    use_wandb: bool = True                                    # Enable/disable wandb
+    wandb_project: str = "GNN_Gym_MoNbTaW_fairchem"          # Wandb project name
+    wandb_entity: str = None                                  # Wandb entity
+    wandb_run_name: str = None                                # Run name
+    wandb_tags: List[str] = field(default_factory=list)      # Tags
+    wandb_notes: str = "FAIRChem UMA-m-1p1 test for Mo-Nb-Ta-W"  # Notes
+    wandb_log_interval: int = 1                               # Log every N epochs
+    wandb_watch_model: bool = True                            # Watch model gradients
+    wandb_watch_freq: int = 10                                # Watch frequency
     
     def get_model_name(self, n_samples: int = None, cycle: int = None) -> str:
-        """
-        Generate a descriptive model name based on configuration.
-        
-        Format: {timestamp}-samples{n}-cycle{c}-GNN-{layers}x{hidden}-MLP-{mlp_structure}-{scheduler}
-        
-        Args:
-            n_samples: Number of training samples (optional)
-            cycle: Active learning cycle number (optional)
-        
-        Returns:
-            model_name: Descriptive model name
-        
-        Example:
-            "20241030-143522-samples2500-cycle0-GNN-5x64-MLP-1024-512-256-cosine"
-        """
-        # Timestamp first for easy sorting
+        """Generate a descriptive model name based on configuration."""
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        
-        # MLP structure as string
         mlp_str = "-".join(map(str, self.mlp_hidden_dims))
-        
-        # Scheduler type
         scheduler = self.scheduler_type if self.use_scheduler else "none"
         
-        # Build name (timestamp first!)
         parts = [timestamp]
         
-        # Add sample size if provided
         if n_samples is not None:
             parts.append(f"samples{n_samples}")
         
-        # Add cycle if provided
         if cycle is not None:
             parts.append(f"cycle{cycle}")
         
-        # Add architecture info
         parts.append(f"GNN-{self.gnn_num_layers}x{self.gnn_hidden_dim}")
         parts.append(f"MLP-{mlp_str}")
         parts.append(scheduler)
         
-        model_name = "-".join(parts)
-        
-        return model_name
+        return "-".join(parts)
     
     def get_experiment_name(self, n_samples: int = None, cycle: int = None) -> str:
-        """
-        Generate experiment name for wandb with timestamp, dataset size, and cycle.
-        
-        Format: {date}-{time}-samples{n}-cycle{c}-GNN
-        
-        Args:
-            n_samples: Number of training samples (optional)
-            cycle: Active learning cycle number (optional)
-        
-        Returns:
-            experiment_name: Simple experiment name with timestamp
-        
-        Example:
-            "20241030-143522-samples2500-cycle0-GNN"
-        """
+        """Generate experiment name for wandb with timestamp, dataset size, and cycle."""
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         parts = [timestamp]
         
@@ -257,6 +235,10 @@ if __name__ == "__main__":
     
     print("\nCALCULATOR:")
     print(f"  calculator: {config.calculator}")
+    if config.calculator == "fairchem":
+        print(f"  fairchem_model: {config.fairchem_model}")
+    elif config.calculator == "chgnet":
+        print(f"  chgnet_model: {config.chgnet_model}")
     
     print("\nMATERIAL SYSTEM:")
     print(f"  elements: {config.elements}")
@@ -300,20 +282,6 @@ if __name__ == "__main__":
     print("\nLEARNING RATE SCHEDULER:")
     print(f"  use_scheduler: {config.use_scheduler}")
     print(f"  scheduler_type: {config.scheduler_type}")
-    if config.scheduler_type == "cosine_warm_restarts":
-        print(f"  scheduler_t_0: {config.scheduler_t_0}")
-        print(f"  scheduler_t_mult: {config.scheduler_t_mult}")
-        print(f"  scheduler_restart_decay: {config.scheduler_restart_decay}")
-        print(f"  scheduler_eta_min: {config.scheduler_eta_min}")
-    elif config.scheduler_type == "cosine":
-        print(f"  scheduler_t_max: {config.scheduler_t_max}")
-        print(f"  scheduler_eta_min: {config.scheduler_eta_min}")
-    elif config.scheduler_type == "plateau":
-        print(f"  scheduler_factor: {config.scheduler_factor}")
-        print(f"  scheduler_patience: {config.scheduler_patience}")
-    elif config.scheduler_type == "step":
-        print(f"  scheduler_step_size: {config.scheduler_step_size}")
-        print(f"  scheduler_factor: {config.scheduler_factor}")
     
     print("\nNEB PARAMETERS:")
     print(f"  neb_images: {config.neb_images}")
@@ -330,29 +298,11 @@ if __name__ == "__main__":
     print(f"  al_n_query: {config.al_n_query}")
     print(f"  al_query_strategy: {config.al_query_strategy}")
     print(f"  al_max_cycles: {config.al_max_cycles}")
-    print(f"  al_seed: {config.al_seed}")
-    print(f"  al_results_dir: {config.al_results_dir}")
     
     print("\nCONVERGENCE CRITERIA:")
     print(f"  al_convergence_check: {config.al_convergence_check}")
     print(f"  al_convergence_metric: {config.al_convergence_metric}")
     print(f"  al_convergence_threshold_mae: {config.al_convergence_threshold_mae} eV")
-    print(f"  al_convergence_threshold_rel_mae: {config.al_convergence_threshold_rel_mae}")
     print(f"  al_convergence_patience: {config.al_convergence_patience} cycles")
-    
-    print("\nLOGGING (Weights & Biases):")
-    print(f"  use_wandb: {config.use_wandb}")
-    print(f"  wandb_project: {config.wandb_project}")
-    print(f"  wandb_entity: {config.wandb_entity}")
-    print(f"  wandb_run_name: {config.wandb_run_name}")
-    print(f"  wandb_tags: {config.wandb_tags}")
-    print(f"  wandb_notes: {config.wandb_notes}")
-    print(f"  wandb_log_interval: {config.wandb_log_interval}")
-    print(f"  wandb_watch_model: {config.wandb_watch_model}")
-    print(f"  wandb_watch_freq: {config.wandb_watch_freq}")
-    
-    print("\nGENERATED NAMES:")
-    print(f"  Model name: {config.get_model_name(n_samples=2500, cycle=0)}")
-    print(f"  Experiment name: {config.get_experiment_name(n_samples=2500, cycle=0)}")
     
     print("\n" + "="*70)
