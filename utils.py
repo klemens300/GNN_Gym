@@ -2,6 +2,7 @@
 Utility Functions for Model I/O and Prediction
 
 Functions:
+- set_seed: Set random seeds for reproducibility
 - get_node_input_dim: Calculate node feature dimension from builder
 - save_model_for_inference: Save model with metadata for later use
 - load_model_for_inference: Load model with validation
@@ -18,6 +19,56 @@ from typing import List, Tuple, Optional
 from torch_geometric.data import Batch
 
 from model import create_model_from_config, count_parameters
+
+
+# ============================================================================
+# REPRODUCIBILITY
+# ============================================================================
+
+def set_seed(seed: int = 42):
+    """
+    Set random seeds for reproducibility.
+    
+    Sets seeds for:
+    - Python random
+    - NumPy
+    - PyTorch (CPU and CUDA)
+    - PyTorch backends (deterministic algorithms)
+    
+    Args:
+        seed: Random seed value
+    
+    Example:
+        >>> set_seed(42)
+        >>> # All models initialized after this will be identical
+    
+    Note:
+        Enabling deterministic mode may reduce performance slightly.
+        This is necessary for full reproducibility.
+    """
+    import random
+    import numpy as np
+    
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)  # For multi-GPU setups
+    
+    # Make PyTorch operations deterministic
+    # Note: This may reduce performance
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    
+    # Use deterministic algorithms where possible
+    # (Available in PyTorch >= 1.8)
+    try:
+        torch.use_deterministic_algorithms(True)
+    except AttributeError:
+        # Older PyTorch version
+        pass
 
 
 # ============================================================================
@@ -117,7 +168,7 @@ def save_model_for_inference(
     # Save
     torch.save(checkpoint, filepath)
     
-    print(f"✓ Model saved: {filepath}")
+    print(f"? Model saved: {filepath}")
 
 
 # ============================================================================
@@ -182,13 +233,13 @@ def load_model_for_inference(filepath: str, config, validate: bool = False):
     # Load weights
     try:
         model.load_state_dict(checkpoint['model_state_dict'])
-        print(f"✓ Model loaded successfully")
+        print(f"? Model loaded successfully")
     except Exception as e:
-        print(f"⚠️  Warning: Could not load all weights: {e}")
+        print(f"??  Warning: Could not load all weights: {e}")
         print(f"   This may happen if model architecture changed")
         # Try partial loading
         model.load_state_dict(checkpoint['model_state_dict'], strict=False)
-        print(f"✓ Model loaded (partial)")
+        print(f"? Model loaded (partial)")
     
     # Set to eval mode
     model.eval()
@@ -372,6 +423,12 @@ if __name__ == "__main__":
     print("UTILS MODULE")
     print("="*70)
     
+    # Test set_seed
+    print("\nTesting set_seed:")
+    set_seed(42)
+    print("  ? Random seeds set to 42")
+    print("  All subsequent operations will be deterministic")
+    
     config = Config()
     builder = TemplateGraphBuilder(config)
     
@@ -380,6 +437,7 @@ if __name__ == "__main__":
     print(f"  {dim} (3 coords + {len(builder.elements)} elements + 4 features)")
     
     print("\nAvailable Functions:")
+    print("  - set_seed(seed)")
     print("  - get_node_input_dim(builder)")
     print("  - save_model_for_inference(model, path, config, builder, ...)")
     print("  - load_model_for_inference(path, config, validate=False)")

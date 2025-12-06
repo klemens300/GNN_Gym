@@ -8,6 +8,7 @@ CORRECTIONS:
 - Removed rel_mae from wandb logging
 - Added patience_counter to wandb
 - Removed epoch from wandb logging
+- Updated scheduler parameter names
 """
 
 import torch
@@ -288,32 +289,32 @@ class Trainer:
             return torch.optim.lr_scheduler.ReduceLROnPlateau(
                 self.optimizer,
                 mode='min',
-                factor=self.config.scheduler_factor,
-                patience=self.config.scheduler_patience,
+                factor=self.config.plateau_factor,
+                patience=self.config.plateau_patience,
                 verbose=True
             )
         
         elif scheduler_type == "cosine":
             return torch.optim.lr_scheduler.CosineAnnealingLR(
                 self.optimizer,
-                T_max=self.config.scheduler_t_max,
-                eta_min=self.config.scheduler_eta_min
+                T_max=self.config.cosine_t_max,
+                eta_min=self.config.cosine_eta_min
             )
         
         elif scheduler_type == "cosine_warm_restarts":
             return CosineAnnealingWarmRestarts(
                 self.optimizer,
-                T_0=self.config.scheduler_t_0,
-                T_mult=self.config.scheduler_t_mult,
-                eta_min=self.config.scheduler_eta_min,
-                restart_decay=self.config.scheduler_restart_decay
+                T_0=self.config.warm_restart_t_0,
+                T_mult=int(self.config.warm_restart_t_mult),
+                eta_min=self.config.warm_restart_eta_min,
+                restart_decay=self.config.warm_restart_decay
             )
         
         elif scheduler_type == "step":
             return torch.optim.lr_scheduler.StepLR(
                 self.optimizer,
-                step_size=self.config.scheduler_step_size,
-                gamma=self.config.scheduler_factor
+                step_size=self.config.step_size,
+                gamma=self.config.step_gamma
             )
         
         else:
@@ -605,7 +606,7 @@ class Trainer:
                 self.save_checkpoint(str(checkpoint_path), is_best=True)
                 
                 if verbose:
-                    self.logger.info(f"  → New best model! Val loss: {val_loss:.4f}")
+                    self.logger.info(f"  ? New best model! Val loss: {val_loss:.4f}")
             else:
                 self.patience_counter += 1
                 
@@ -671,13 +672,15 @@ class Trainer:
 # Example usage
 if __name__ == "__main__":
     print("="*70)
-    print("TRAINER MODULE (CORRECTED)")
+    print("TRAINER MODULE (UPDATED)")
     print("="*70)
     
-    print("\nCORRECTIONS:")
-    print("  ✓ Removed rel_mae from wandb logging")
-    print("  ✓ Added patience_counter to wandb")
-    print("  ✓ Removed epoch counter from wandb")
+    print("\nUPDATES:")
+    print("  ? Updated scheduler parameter names")
+    print("  ? plateau_factor, plateau_patience")
+    print("  ? step_size, step_gamma")
+    print("  ? cosine_t_max, cosine_eta_min")
+    print("  ? warm_restart_t_0, warm_restart_t_mult, etc.")
     
     print("\nFeatures:")
     print("  - Training and validation loops")

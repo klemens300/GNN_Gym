@@ -25,7 +25,7 @@ from trainer import Trainer
 from dataset import create_dataloaders
 from template_graph_builder import TemplateGraphBuilder
 from model import create_model_from_config, count_parameters
-from utils import get_node_input_dim, save_model_for_inference
+from utils import get_node_input_dim, save_model_for_inference, set_seed
 
 # --- Optional Weights & Biases support ---
 try:
@@ -92,55 +92,6 @@ def sample_simplex_uniform(n: int, k: int) -> np.ndarray:
     return np.random.dirichlet(alpha=np.ones(k), size=n)
 
 
-def initial_data_creation_if_needed(config: Config, oracle: Oracle, logger: logging.Logger):
-    """
-    Create an initial dataset if CSV is missing or empty.
-    Uses config.al_initial_samples to determine the number of samples.
-    """
-    csv_path = config.csv_path
-    if not is_csv_missing_or_empty(csv_path):
-        logger.info(f"Database found: {csv_path}")
-        return
-
-    elements = list(getattr(config, "elements", []))
-    n_seed = int(getattr(config, "al_initial_samples", 0) or 0)
-    if not elements or n_seed <= 0:
-        raise RuntimeError(
-            "Initial data creation requires 'elements' and 'al_initial_samples' > 0 in config."
-        )
-
-    logger.info("="*70)
-    logger.info("INITIAL DATA CREATION (CSV empty or not found)")
-    logger.info("="*70)
-    logger.info(f"Elements: {elements}")
-    logger.info(f"Samples to create: {n_seed}")
-    logger.info(f"Target CSV: {csv_path}")
-
-    weights = sample_simplex_uniform(n_seed, len(elements))
-    compositions = []
-    for row in weights:
-        comp = {el: float(val) for el, val in zip(elements, row)}
-        s = sum(comp.values())
-        if abs(s - 1.0) > 1e-12:
-            for el in comp:
-                comp[el] /= s
-        compositions.append(comp)
-
-    successes = 0
-    for i, comp in enumerate(compositions, 1):
-        try:
-            logger.info(f"  [{i}/{n_seed}] Calculating: {comp}")
-            ok = oracle.calculate(comp)
-            if ok is not False:
-                successes += 1
-        except Exception as e:
-            logger.error(f"   Error at sample {i}: {e}")
-
-    if successes == 0:
-        raise RuntimeError("Initial data creation failed: no valid samples added.")
-    logger.info(f"Initial data creation completed. {successes} samples added.")
-
-
 def get_database_stats(csv_path: str) -> dict:
     """Return summary statistics for the current database CSV."""
     p = Path(csv_path)
@@ -156,14 +107,124 @@ def get_database_stats(csv_path: str) -> dict:
     }
 
 
+def initial_data_creation_if_needed(config: Config, oracle: Oracle, logger: logging.Logger):
+    """
+    Create initial dataset with intelligent resume capability.
+    
+    Logic:
+    - If CSV doesn't exist: Create al_initial_samples samples
+    - If CSV exists but has fewer samples: Create remaining samples to reach al_initial_samples
+    - If CSV has enough samples: Skip data creation
+    
+    Args:
+        config: Config object
+        oracle: Oracle instance
+        logger: Logger instance
+    """
+    csv_path = config.csv_path
+    target_samples = int(getattr(config, "al_initial_samples", 0) or 0)
+    
+    if target_samples <= 0:
+        raise RuntimeError(
+            "Initial data creation requires 'al_initial_samples' > 0 in config."
+        )
+    
+    # Check current database state
+    db_stats = get_database_stats(csv_path)
+    current_samples = db_stats['n_samples']
+    
+    # Case 1: Enough data already exists
+    if current_samples >= target_samples:
+        logger.info("="*70)
+        logger.info("INITIAL DATA CHECK")
+        logger.info("="*70)
+        logger.info(f"Target samples: {target_samples}")
+        logger.info(f"Current samples: {current_samples}")
+        logger.info("? Sufficient data available, skipping initial data creation")
+        logger.info("="*70)
+        return
+    
+    # Case 2: Need to create (remaining) data
+    remaining = target_samples - current_samples
+    
+    logger.info("="*70)
+    if current_samples == 0:
+        logger.info("INITIAL DATA CREATION (CSV empty or not found)")
+    else:
+        logger.info("RESUMING INITIAL DATA CREATION")
+    logger.info("="*70)
+    logger.info(f"Target samples: {target_samples}")
+    logger.info(f"Current samples: {current_samples}")
+    logger.info(f"Samples to create: {remaining}")
+    logger.info(f"Target CSV: {csv_path}")
+    
+    elements = list(getattr(config, "elements", []))
+    if not elements:
+        raise RuntimeError("Initial data creation requires 'elements' in config.")
+    
+    logger.info(f"Elements: {elements}")
+    
+    # Generate compositions using Dirichlet sampling
+    weights = sample_simplex_uniform(remaining, len(elements))
+    compositions = []
+    for row in weights:
+        comp = {el: float(val) for el, val in zip(elements, row)}
+        # Normalize to ensure sum = 1.0
+        s = sum(comp.values())
+        if abs(s - 1.0) > 1e-12:
+            for el in comp:
+                comp[el] /= s
+        compositions.append(comp)
+    
+    # Calculate samples
+    successes = 0
+    for i, comp in enumerate(compositions, 1):
+        try:
+            logger.info(f"  [{current_samples + i}/{target_samples}] Calculating: {comp}")
+            ok = oracle.calculate(comp)
+            if ok is not False:
+                successes += 1
+        except Exception as e:
+            logger.error(f"   Error at sample {i}: {e}")
+    
+    if successes == 0:
+        raise RuntimeError("Initial data creation failed: no valid samples added.")
+    
+    # Final check
+    final_stats = get_database_stats(csv_path)
+    logger.info("="*70)
+    logger.info(f"Initial data creation completed:")
+    logger.info(f"  Added: {successes} samples")
+    logger.info(f"  Total in database: {final_stats['n_samples']} samples")
+    logger.info("="*70)
+
+
 def train_cycle_model(config: Config, cycle: int, logger: logging.Logger, is_final: bool = False) -> dict:
-    """Train the model for the given active learning cycle."""
+    """
+    Train the model for the given active learning cycle.
+    
+    Args:
+        config: Config object
+        cycle: Cycle number
+        logger: Logger instance
+        is_final: Whether this is final model training
+    
+    Returns:
+        dict: Training results with best metrics
+    """
     logger.info("="*70)
     if is_final:
         logger.info("TRAINING FINAL MODEL")
     else:
         logger.info(f"TRAINING MODEL - CYCLE {cycle}")
     logger.info("="*70)
+    
+    # ========== DETERMINISTIC INITIALIZATION ==========
+    # Set seeds for reproducibility
+    seed = config.random_seed + cycle  # Different seed per cycle, but deterministic
+    logger.info(f"Setting random seed: {seed}")
+    set_seed(seed)
+    # ==================================================
 
     outdir = Path(config.checkpoint_dir) / ("final_model" if is_final else f"cycle_{cycle}")
     outdir.mkdir(parents=True, exist_ok=True)
@@ -234,7 +295,13 @@ def train_cycle_model(config: Config, cycle: int, logger: logging.Logger, is_fin
 
 
 def active_learning_loop(config: Config, logger: logging.Logger):
-    """Main active learning loop with convergence checking and final model training."""
+    """
+    Main active learning loop with convergence checking and final model training.
+    
+    Args:
+        config: Config object
+        logger: Logger instance
+    """
     logger.info("="*70)
     logger.info("ACTIVE LEARNING LOOP STARTING")
     logger.info("="*70)

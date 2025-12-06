@@ -99,19 +99,29 @@ class Config:
     # Final model training (after convergence or max cycles)
     final_model_patience: int = 666      # Higher patience for final model
     
-    # Learning rate scheduling
-    use_scheduler: bool = True           # Use learning rate scheduler
-    scheduler_type: str = "cosine_warm_restarts"  # Scheduler type
-    scheduler_factor: float = 0.5        # Reduce LR by this factor (plateau, step)
-    scheduler_patience: int = 10         # Patience for LR reduction (plateau)
-    scheduler_step_size: int = 100       # Step size for StepLR (step)
-    scheduler_t_max: int = 100           # T_max for CosineAnnealingLR (cosine)
-    scheduler_eta_min: float = 1e-6      # Minimum LR for CosineAnnealingLR
+    # ============================================================
+    # LEARNING RATE SCHEDULER
+    # ============================================================
+    use_scheduler: bool = True
+    scheduler_type: str = "cosine_warm_restarts"  # Type: "plateau", "step", "cosine", "cosine_warm_restarts"
     
-    # Cosine Warm Restarts specific
-    scheduler_t_0: int = 100             # First restart period (epochs)
-    scheduler_t_mult: int = 1.2          # Period multiplier
-    scheduler_restart_decay: float = 0.9 # LR decay factor after restart
+    # --- ReduceLROnPlateau (scheduler_type="plateau") ---
+    plateau_factor: float = 0.5              # Reduce LR by this factor
+    plateau_patience: int = 10               # Epochs without improvement
+    
+    # --- StepLR (scheduler_type="step") ---
+    step_size: int = 100                     # Step every N epochs
+    step_gamma: float = 0.5                  # Multiply LR by gamma
+    
+    # --- CosineAnnealingLR (scheduler_type="cosine") ---
+    cosine_t_max: int = 100                  # Period length
+    cosine_eta_min: float = 1e-6             # Minimum LR
+    
+    # --- CosineAnnealingWarmRestarts (scheduler_type="cosine_warm_restarts") ---
+    warm_restart_t_0: int = 100              # First restart period (epochs)
+    warm_restart_t_mult: float = 1.2         # Period multiplier after restart
+    warm_restart_eta_min: float = 1e-6       # Minimum LR
+    warm_restart_decay: float = 0.9          # LR decay factor after restart
     
     # ============================================================
     # NEB (Nudged Elastic Band) PARAMETERS
@@ -135,10 +145,10 @@ class Config:
     # ACTIVE LEARNING
     # ============================================================
     # Initial data generation (Cycle 0)
-    al_initial_samples: int = 5000       # Initial random samples before AL starts
+    al_initial_samples: int = 15000       # Initial random samples before AL starts
 
     # Test set generation
-    al_n_test: int = 1000                # Number of test compositions per cycle
+    al_n_test: int = 4000                # Number of test compositions per cycle
     al_test_strategy: str = 'uniform'    # Test generation strategy
 
     # Query strategy
@@ -175,7 +185,7 @@ class Config:
     # LOGGING (Weights & Biases)
     # ============================================================
     use_wandb: bool = True                                    # Enable/disable wandb
-    wandb_project: str = "GNN_Gym_MoNbTaW_fairchem"          # Wandb project name
+    wandb_project: str = "GNN_Gym_MoNbTaW_fairchem_more_data"          # Wandb project name
     wandb_entity: str = None                                  # Wandb entity
     wandb_run_name: str = None                                # Run name
     wandb_tags: List[str] = field(default_factory=list)      # Tags
@@ -282,6 +292,20 @@ if __name__ == "__main__":
     print("\nLEARNING RATE SCHEDULER:")
     print(f"  use_scheduler: {config.use_scheduler}")
     print(f"  scheduler_type: {config.scheduler_type}")
+    if config.scheduler_type == "plateau":
+        print(f"  plateau_factor: {config.plateau_factor}")
+        print(f"  plateau_patience: {config.plateau_patience}")
+    elif config.scheduler_type == "step":
+        print(f"  step_size: {config.step_size}")
+        print(f"  step_gamma: {config.step_gamma}")
+    elif config.scheduler_type == "cosine":
+        print(f"  cosine_t_max: {config.cosine_t_max}")
+        print(f"  cosine_eta_min: {config.cosine_eta_min}")
+    elif config.scheduler_type == "cosine_warm_restarts":
+        print(f"  warm_restart_t_0: {config.warm_restart_t_0}")
+        print(f"  warm_restart_t_mult: {config.warm_restart_t_mult}")
+        print(f"  warm_restart_eta_min: {config.warm_restart_eta_min}")
+        print(f"  warm_restart_decay: {config.warm_restart_decay}")
     
     print("\nNEB PARAMETERS:")
     print(f"  neb_images: {config.neb_images}")
