@@ -75,9 +75,9 @@ class Config:
     # MODEL ARCHITECTURE
     # ============================================================
     # GNN Encoder
-    gnn_hidden_dim: int = 64             # Hidden dimension for GNN layers
+    gnn_hidden_dim: int = 128             # Hidden dimension for GNN layers
     gnn_num_layers: int = 5              # Number of message passing layers
-    gnn_embedding_dim: int = 64          # Output dimension of GNN encoder
+    gnn_embedding_dim: int = 256          # Output dimension of GNN encoder
     
     # MLP Predictor
     mlp_hidden_dims: List[int] = field(default_factory=lambda: [1024, 512, 256])
@@ -115,7 +115,7 @@ class Config:
     
     # --- CosineAnnealingLR (scheduler_type="cosine") ---
     cosine_t_max: int = 100                  # Period length
-    cosine_eta_min: float = 1e-6             # Minimum LR
+    cosine_eta_min: float = 1e-4             # Minimum LR
     
     # --- CosineAnnealingWarmRestarts (scheduler_type="cosine_warm_restarts") ---
     warm_restart_t_0: int = 100              # First restart period (epochs)
@@ -145,7 +145,7 @@ class Config:
     # ACTIVE LEARNING
     # ============================================================
     # Initial data generation (Cycle 0)
-    al_initial_samples: int = 15000       # Initial random samples before AL starts
+    al_initial_samples: int = 20000       # Initial random samples before AL starts
 
     # Test set generation
     al_n_test: int = 4000                # Number of test compositions per cycle

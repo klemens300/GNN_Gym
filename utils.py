@@ -33,18 +33,18 @@ def set_seed(seed: int = 42):
     - Python random
     - NumPy
     - PyTorch (CPU and CUDA)
-    - PyTorch backends (deterministic algorithms)
     
     Args:
         seed: Random seed value
     
     Example:
         >>> set_seed(42)
-        >>> # All models initialized after this will be identical
+        >>> # All models initialized after this will be similar
     
     Note:
-        Enabling deterministic mode may reduce performance slightly.
-        This is necessary for full reproducibility.
+        Full determinism is disabled for CUDA operations to avoid
+        performance penalties and compatibility issues with CuBLAS.
+        This provides good reproducibility while maintaining performance.
     """
     import random
     import numpy as np
@@ -57,18 +57,15 @@ def set_seed(seed: int = 42):
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)  # For multi-GPU setups
     
-    # Make PyTorch operations deterministic
-    # Note: This may reduce performance
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    # Disable strict determinism for CUDA compatibility
+    # CuBLAS operations are not deterministic in CUDA >= 10.2
+    torch.backends.cudnn.deterministic = False
+    torch.backends.cudnn.benchmark = True  # Enable for better performance
     
-    # Use deterministic algorithms where possible
-    # (Available in PyTorch >= 1.8)
-    try:
-        torch.use_deterministic_algorithms(True)
-    except AttributeError:
-        # Older PyTorch version
-        pass
+    # Don't enforce deterministic algorithms (causes CUDA issues)
+    # If you need full determinism, set CUBLAS_WORKSPACE_CONFIG=:4096:8
+    # and uncomment the line below:
+    # torch.use_deterministic_algorithms(True)
 
 
 # ============================================================================
@@ -82,7 +79,7 @@ def get_node_input_dim(builder) -> int:
     Node features:
     - 3D coordinates (3)
     - One-hot element encoding (n_elements)
-    - 4 additional features (degree, coordination, etc.)
+    - 4 additional features (atomic properties)
     
     Args:
         builder: TemplateGraphBuilder instance
@@ -235,7 +232,7 @@ def load_model_for_inference(filepath: str, config, validate: bool = False):
         model.load_state_dict(checkpoint['model_state_dict'])
         print(f"? Model loaded successfully")
     except Exception as e:
-        print(f"??  Warning: Could not load all weights: {e}")
+        print(f"?  Warning: Could not load all weights: {e}")
         print(f"   This may happen if model architecture changed")
         # Try partial loading
         model.load_state_dict(checkpoint['model_state_dict'], strict=False)
@@ -381,7 +378,10 @@ def print_model_info(model, checkpoint: dict = None):
     
     # Model architecture
     print("\nArchitecture:")
-    print(f"  Total parameters: {count_parameters(model):,}")
+    params = count_parameters(model)
+    print(f"  Encoder parameters: {params['encoder']:,}")
+    print(f"  Predictor parameters: {params['predictor']:,}")
+    print(f"  Total parameters: {params['total']:,}")
     
     # Checkpoint info
     if checkpoint is not None:
@@ -427,7 +427,8 @@ if __name__ == "__main__":
     print("\nTesting set_seed:")
     set_seed(42)
     print("  ? Random seeds set to 42")
-    print("  All subsequent operations will be deterministic")
+    print("  Seeds are set for Python, NumPy, and PyTorch")
+    print("  Note: Strict determinism disabled for CUDA compatibility")
     
     config = Config()
     builder = TemplateGraphBuilder(config)
