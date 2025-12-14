@@ -60,7 +60,7 @@ class Config:
     # ============================================================
     # DATA
     # ============================================================
-    batch_size: int = 32                 # Batch size for training
+    batch_size: int = 64                 # Batch size for training
     num_workers: int = 0                 # DataLoader workers
     
     # Data cleanup (barrier filtering)
@@ -75,12 +75,12 @@ class Config:
     # MODEL ARCHITECTURE
     # ============================================================
     # GNN Encoder
-    gnn_hidden_dim: int = 128             # Hidden dimension for GNN layers
-    gnn_num_layers: int = 5              # Number of message passing layers
-    gnn_embedding_dim: int = 256          # Output dimension of GNN encoder
+    gnn_hidden_dim: int = 64             # Hidden dimension for GNN layers
+    gnn_num_layers: int = 3              # Number of message passing layers
+    gnn_embedding_dim: int = 128          # Output dimension of GNN encoder
     
     # MLP Predictor
-    mlp_hidden_dims: List[int] = field(default_factory=lambda: [1024, 512, 256])
+    mlp_hidden_dims: List[int] = field(default_factory=lambda: [256, 128, 64])
     dropout: float = 0.1                 # Dropout rate
     
     # ============================================================
@@ -115,12 +115,12 @@ class Config:
     
     # --- CosineAnnealingLR (scheduler_type="cosine") ---
     cosine_t_max: int = 100                  # Period length
-    cosine_eta_min: float = 1e-4             # Minimum LR
+    cosine_eta_min: float = 1e-6             # Minimum LR
     
     # --- CosineAnnealingWarmRestarts (scheduler_type="cosine_warm_restarts") ---
     warm_restart_t_0: int = 100              # First restart period (epochs)
     warm_restart_t_mult: float = 1.2         # Period multiplier after restart
-    warm_restart_eta_min: float = 1e-6       # Minimum LR
+    warm_restart_eta_min: float = 1e-4       # Minimum LR
     warm_restart_decay: float = 0.9          # LR decay factor after restart
     
     # ============================================================
@@ -189,7 +189,7 @@ class Config:
     wandb_entity: str = None                                  # Wandb entity
     wandb_run_name: str = None                                # Run name
     wandb_tags: List[str] = field(default_factory=list)      # Tags
-    wandb_notes: str = "FAIRChem UMA-m-1p1 test for Mo-Nb-Ta-W"  # Notes
+    wandb_notes: str = "."  # Notes
     wandb_log_interval: int = 1                               # Log every N epochs
     wandb_watch_model: bool = True                            # Watch model gradients
     wandb_watch_freq: int = 10                                # Watch frequency
