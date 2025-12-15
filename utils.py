@@ -76,10 +76,11 @@ def get_node_input_dim(builder) -> int:
     """
     Calculate node input dimension from builder.
     
-    Node features:
-    - 3D coordinates (3)
+    Node features (rotation-invariant):
     - One-hot element encoding (n_elements)
-    - 4 additional features (atomic properties)
+    - 4 atomic properties (radius, mass, electronegativity, valence)
+    
+    NOTE: Cartesian positions removed for rotation invariance.
     
     Args:
         builder: TemplateGraphBuilder instance
@@ -92,7 +93,7 @@ def get_node_input_dim(builder) -> int:
         >>> dim = get_node_input_dim(builder)
         >>> print(f"Node input dim: {dim}")
     """
-    return 3 + len(builder.elements) + 4
+    return len(builder.elements) + 4
 
 
 # ============================================================================
@@ -210,7 +211,7 @@ def load_model_for_inference(filepath: str, config, validate: bool = False):
     # Get elements and node_input_dim from Config (not checkpoint)
     from template_graph_builder import TemplateGraphBuilder
     builder = TemplateGraphBuilder(config)
-    node_input_dim = 3 + len(builder.elements) + 4
+    node_input_dim = len(builder.elements) + 4
     
     print(f"  Using Config:")
     print(f"    Elements: {builder.elements}")
@@ -420,7 +421,7 @@ if __name__ == "__main__":
     from template_graph_builder import TemplateGraphBuilder
     
     print("="*70)
-    print("UTILS MODULE")
+    print("UTILS MODULE (ROTATION INVARIANT)")
     print("="*70)
     
     # Test set_seed
@@ -435,7 +436,8 @@ if __name__ == "__main__":
     
     print("\nNode Input Dimension:")
     dim = get_node_input_dim(builder)
-    print(f"  {dim} (3 coords + {len(builder.elements)} elements + 4 features)")
+    print(f"  {dim} ({len(builder.elements)} elements + 4 features)")
+    print(f"  NOTE: Positions removed for rotation invariance")
     
     print("\nAvailable Functions:")
     print("  - set_seed(seed)")

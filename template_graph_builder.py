@@ -7,11 +7,16 @@ Only the element occupancy and atomic positions change between samples.
 Strategy:
 1. Auto-detect elements from database
 2. Build template graph ONCE (connectivity is fixed)
-3. For each sample: Update node features (positions + elements from CIF)
+3. For each sample: Update node features (elements from CIF)
 4. Graphs created on-the-fly with REQUIRED barrier labels
 
 Performance: ~100x faster than building individual graphs
 Storage: No .pt files needed
+
+ROTATION INVARIANCE:
+- Cartesian positions REMOVED from node features
+- Geometric information preserved in edge features (distances)
+- This ensures rotation invariance without data augmentation
 """
 
 import numpy as np
@@ -33,10 +38,12 @@ class TemplateGraphBuilder:
     Automatically detects elements from database.
     Assumes all structures are 4x4x4 BCC supercells with one vacancy.
     
-    Node Features (7 + N):
-    - Cartesian positions (3) - FROM CIF
+    Node Features (N + 4) - ROTATION INVARIANT:
     - Element one-hot encoding (N): Automatically detected from database
     - Atomic properties (4): radius, mass, electronegativity, valence
+    
+    NOTE: Cartesian positions removed for rotation invariance.
+          Geometric information preserved in edge features (distances).
     
     Edge Features (1):
     - Distance between atoms (from template - fixed geometry)
@@ -66,7 +73,7 @@ class TemplateGraphBuilder:
             csv_path = config.csv_path
         
         self.elements = self._detect_elements_from_database(csv_path)
-        print(f"✓ Detected elements from database: {self.elements}")
+        print(f"? Detected elements from database: {self.elements}")
         
         self.element_to_idx = {elem: idx for idx, elem in enumerate(self.elements)}
         
@@ -91,10 +98,11 @@ class TemplateGraphBuilder:
         # Build template once (only connectivity!)
         print(f"Building template graph...")
         self._build_template()
-        print(f"✓ Template created: {self.template_num_nodes} nodes, "
+        print(f"? Template created: {self.template_num_nodes} nodes, "
               f"{self.template_edge_index.shape[1]} edges")
-        print(f"✓ Node features: {3 + len(self.elements) + 4} "
-              f"(pos: 3, one-hot: {len(self.elements)}, props: 4)")
+        print(f"? Node features: {len(self.elements) + 4} "
+              f"(one-hot: {len(self.elements)}, props: 4)")
+        print(f"  NOTE: Positions removed for rotation invariance")
     
     def _detect_elements_from_database(self, csv_path: str) -> list:
         """
@@ -131,7 +139,7 @@ class TemplateGraphBuilder:
         all_elements = set()
         
         for comp_string in df['composition_string'].unique():
-            # Extract element symbols (e.g., "Mo25Nb50Ta25" → ["Mo", "Nb", "Ta"])
+            # Extract element symbols (e.g., "Mo25Nb50Ta25" ? ["Mo", "Nb", "Ta"])
             # Regex: capital letter followed by optional lowercase letter
             elements = re.findall(r'[A-Z][a-z]?', comp_string)
             all_elements.update(elements)
@@ -273,30 +281,29 @@ class TemplateGraphBuilder:
     
     def _get_node_features(self, elements: list, positions: np.ndarray) -> torch.Tensor:
         """
-        Create node features from element list and positions.
+        Create node features from element list (positions removed for rotation invariance).
         
-        Features (7 + N total):
-        - Cartesian positions (3) - FROM CIF (changes between samples!)
+        Features (N + 4 total):
         - Element one-hot encoding (N) - dynamically sized
         - Atomic properties (4) - radius, mass, electronegativity, valence
+        
+        NOTE: Cartesian positions REMOVED to ensure rotation invariance.
+              Geometric information is preserved in edge features (distances).
         
         Parameters:
         -----------
         elements : list of str
             Element symbols for each node
         positions : np.ndarray [N, 3]
-            Atomic positions FROM CIF
+            Atomic positions - NOT USED (kept for API compatibility)
         
         Returns:
         --------
-        node_features : torch.Tensor [N, 7+N]
+        node_features : torch.Tensor [N, N_elements+4]
         """
         features = []
         
         for i, element in enumerate(elements):
-            # Position from CIF (CHANGES between initial/final!)
-            pos = torch.FloatTensor(positions[i])
-            
             # One-hot encoding (dynamically sized!)
             one_hot = torch.zeros(len(self.elements))
             if element in self.element_to_idx:
@@ -312,8 +319,9 @@ class TemplateGraphBuilder:
             props = self.atomic_properties[element]
             atomic_props = torch.tensor([props[key] for key in self.property_keys])
             
-            # Concatenate: [pos(3), one_hot(N), props(4)] = 7+N features
-            node_feat = torch.cat([pos, one_hot, atomic_props])
+            # Concatenate: [one_hot(N), props(4)] = N+4 features
+            # NOTE: NO positions included!
+            node_feat = torch.cat([one_hot, atomic_props])
             features.append(node_feat)
         
         return torch.stack(features)
@@ -333,7 +341,7 @@ class TemplateGraphBuilder:
         --------
         graph : torch_geometric.data.Data
             PyTorch Geometric graph with:
-            - x: node features [N, 7+N_elements]
+            - x: node features [N, N_elements+4]
             - edge_index: connectivity [2, E] (from template)
             - edge_attr: distances [E, 1] (from template)
             - y: barrier label [1] (REQUIRED)
@@ -349,7 +357,7 @@ class TemplateGraphBuilder:
                 f"but template expects {self.template_num_nodes}"
             )
         
-        # Create node features (positions AND elements change between samples!)
+        # Create node features (only elements, positions NOT used!)
         x = self._get_node_features(elements, positions)
         
         # Create graph with REQUIRED label
@@ -394,7 +402,7 @@ class TemplateGraphBuilder:
         Note:
         -----
         Both graphs share the SAME label because the model predicts
-        the barrier for the transition (initial → final).
+        the barrier for the transition (initial ? final).
         """
         initial_graph = self.cif_to_graph(initial_cif, barrier=backward_barrier)
         final_graph = self.cif_to_graph(final_cif, barrier=backward_barrier)
@@ -407,7 +415,7 @@ if __name__ == "__main__":
     from config import Config
     
     print("="*70)
-    print("TEMPLATE GRAPH BUILDER TEST")
+    print("TEMPLATE GRAPH BUILDER TEST (ROTATION INVARIANT)")
     print("="*70)
     
     # Initialize
@@ -441,7 +449,7 @@ if __name__ == "__main__":
                 )
                 elapsed = (time.time() - start) * 1000
                 
-                print(f"\n✓ Graph pair built in {elapsed:.2f}ms!")
+                print(f"\n? Graph pair built in {elapsed:.2f}ms!")
                 print(f"\nInitial graph:")
                 print(f"  Nodes: {initial_graph.num_nodes}")
                 print(f"  Node features: {initial_graph.x.shape}")
@@ -454,12 +462,10 @@ if __name__ == "__main__":
                 print(f"  Edges: {final_graph.edge_index.shape[1]}")
                 print(f"  Label: {final_graph.y.item():.4f} eV")
                 
-                # Check position differences
-                pos_diff = (initial_graph.x[:, :3] - final_graph.x[:, :3]).abs().sum().item()
-                print(f"\n✓ Position difference: {pos_diff:.2f}")
-                
-                if pos_diff > 0:
-                    print("✓ Initial and final structures have different positions!")
+                # Check element differences
+                elem_diff = (initial_graph.x - final_graph.x).abs().sum().item()
+                print(f"\n? Element feature difference: {elem_diff:.2f}")
+                print("  (Should be non-zero if diffusing elements differ)")
                 
                 # Benchmark
                 print("\nBenchmark: Building 100 graph pairs...")
@@ -471,13 +477,13 @@ if __name__ == "__main__":
                         backward_barrier=backward_barrier
                     )
                 elapsed = (time.time() - start) * 1000
-                print(f"✓ Average time per pair: {elapsed/100:.2f}ms")
+                print(f"? Average time per pair: {elapsed/100:.2f}ms")
                 
             else:
-                print(f"\n✗ CIF files not found")
+                print(f"\n? CIF files not found")
         else:
-            print("\n✗ No data in CSV")
+            print("\n? No data in CSV")
     else:
-        print(f"\n✗ CSV not found: {config.csv_path}")
+        print(f"\n? CSV not found: {config.csv_path}")
     
     print("\n" + "="*70)

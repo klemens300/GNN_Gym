@@ -76,18 +76,18 @@ class Config:
     # ============================================================
     # GNN Encoder
     gnn_hidden_dim: int = 64             # Hidden dimension for GNN layers
-    gnn_num_layers: int = 3              # Number of message passing layers
-    gnn_embedding_dim: int = 128          # Output dimension of GNN encoder
+    gnn_num_layers: int = 5              # Number of message passing layers
+    gnn_embedding_dim: int = 64          # Output dimension of GNN encoder
     
     # MLP Predictor
-    mlp_hidden_dims: List[int] = field(default_factory=lambda: [256, 128, 64])
+    mlp_hidden_dims: List[int] = field(default_factory=lambda: [512, 256, 128])
     dropout: float = 0.1                 # Dropout rate
     
     # ============================================================
     # TRAINING
     # ============================================================
     # Optimization
-    learning_rate: float = 1e-3          # Initial learning rate
+    learning_rate: float = 5e-5          # Initial learning rate
     weight_decay: float = 0.01           # L2 regularization (AdamW)
     gradient_clip_norm: float = 1.0      # Max gradient norm
     
@@ -118,9 +118,9 @@ class Config:
     cosine_eta_min: float = 1e-6             # Minimum LR
     
     # --- CosineAnnealingWarmRestarts (scheduler_type="cosine_warm_restarts") ---
-    warm_restart_t_0: int = 100              # First restart period (epochs)
+    warm_restart_t_0: int = 1000              # First restart period (epochs)
     warm_restart_t_mult: float = 1.2         # Period multiplier after restart
-    warm_restart_eta_min: float = 1e-4       # Minimum LR
+    warm_restart_eta_min: float = 5e-5       # Minimum LR
     warm_restart_decay: float = 0.9          # LR decay factor after restart
     
     # ============================================================
