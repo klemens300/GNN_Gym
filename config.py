@@ -2,6 +2,10 @@
 Configuration for Diffusion Barrier Prediction
 
 All settings in one place for easy management.
+
+UPDATED:
+- Increased learning_rate from 5e-5 to 1e-3 (helps escape mean prediction)
+- Changed loss_function from "mse" to "huber" (more robust for outliers)
 """
 
 from dataclasses import dataclass, field
@@ -103,7 +107,7 @@ class Config:
     # TRAINING
     # ============================================================
     # Optimization
-    learning_rate: float = 5e-5          # Initial learning rate
+    learning_rate: float = 1e-3          # ✅ FIXED: Increased from 5e-5 to 1e-3
     weight_decay: float = 0.01           # L2 regularization (AdamW)
     gradient_clip_norm: float = 1.0      # Max gradient norm
     
@@ -136,7 +140,7 @@ class Config:
     # --- CosineAnnealingWarmRestarts (scheduler_type="cosine_warm_restarts") ---
     warm_restart_t_0: int = 1000              # First restart period (epochs)
     warm_restart_t_mult: float = 1.2         # Period multiplier after restart
-    warm_restart_eta_min: float = 5e-5       # Minimum LR
+    warm_restart_eta_min: float = 1e-4       # Minimum LR (increased from 5e-5)
     warm_restart_decay: float = 0.9          # LR decay factor after restart
     
     # ============================================================
@@ -195,7 +199,9 @@ class Config:
     # ============================================================
     # LOSS FUNCTION
     # ============================================================
-    loss_function: str = "mse"           # Loss: "mse", "mae", "huber", "smooth_l1"
+    loss_function: str = "huber"         # ✅ FIXED: Changed from "mse" to "huber"
+                                         # Options: "mse", "mae", "huber", "smooth_l1"
+                                         # Huber is more robust to outliers
     
     # ============================================================
     # LOGGING (Weights & Biases)
@@ -205,7 +211,7 @@ class Config:
     wandb_entity: str = None                                  # Wandb entity
     wandb_run_name: str = None                                # Run name
     wandb_tags: List[str] = field(default_factory=list)      # Tags
-    wandb_notes: str = "."  # Notes
+    wandb_notes: str = "Fixed: Line graph batching, residual connections, normalized aggregation, higher LR"
     wandb_log_interval: int = 1                               # Log every N epochs
     wandb_watch_model: bool = True                            # Watch model gradients
     wandb_watch_freq: int = 10                                # Watch frequency
@@ -241,7 +247,7 @@ class Config:
         if cycle is not None:
             parts.append(f"cycle{cycle}")
         
-        parts.append("GNN")
+        parts.append("GNN-FIXED")  # Mark as fixed version
         
         return "-".join(parts)
 
@@ -249,10 +255,15 @@ class Config:
 # Display config
 if __name__ == "__main__":
     print("="*70)
-    print("DEFAULT CONFIGURATION")
+    print("DEFAULT CONFIGURATION (FIXED)")
     print("="*70)
     
     config = Config()
+    
+    print("\n✅ FIXES APPLIED:")
+    print(f"  - Learning rate increased: 5e-5 → {config.learning_rate}")
+    print(f"  - Loss function changed: mse → {config.loss_function}")
+    print(f"  - Cosine warm restart eta_min: 5e-5 → {config.warm_restart_eta_min}")
     
     print("\nPATHS:")
     print(f"  csv_path: {config.csv_path}")
@@ -281,6 +292,8 @@ if __name__ == "__main__":
     print("\nGRAPH CONSTRUCTION:")
     print(f"  cutoff_radius: {config.cutoff_radius}")
     print(f"  max_neighbors: {config.max_neighbors}")
+    print(f"  use_line_graph: {config.use_line_graph}")
+    print(f"  line_graph_cutoff: {config.line_graph_cutoff}")
     
     print("\nDATA:")
     print(f"  batch_size: {config.batch_size}")
@@ -293,17 +306,21 @@ if __name__ == "__main__":
     print(f"  gnn_hidden_dim: {config.gnn_hidden_dim}")
     print(f"  gnn_num_layers: {config.gnn_num_layers}")
     print(f"  gnn_embedding_dim: {config.gnn_embedding_dim}")
+    print(f"  use_line_graph: {config.use_line_graph}")
+    print(f"  line_graph_hidden_dim: {config.line_graph_hidden_dim}")
+    print(f"  line_graph_num_layers: {config.line_graph_num_layers}")
     print(f"  mlp_hidden_dims: {config.mlp_hidden_dims}")
     print(f"  dropout: {config.dropout}")
     
     print("\nTRAINING:")
-    print(f"  learning_rate: {config.learning_rate}")
+    print(f"  learning_rate: {config.learning_rate} ✅ INCREASED")
     print(f"  weight_decay: {config.weight_decay}")
     print(f"  gradient_clip_norm: {config.gradient_clip_norm}")
     print(f"  epochs: {config.epochs}")
     print(f"  patience: {config.patience}")
     print(f"  final_model_patience: {config.final_model_patience}")
     print(f"  save_interval: {config.save_interval}")
+    print(f"  loss_function: {config.loss_function} ✅ CHANGED")
     
     print("\nLEARNING RATE SCHEDULER:")
     print(f"  use_scheduler: {config.use_scheduler}")
@@ -320,29 +337,7 @@ if __name__ == "__main__":
     elif config.scheduler_type == "cosine_warm_restarts":
         print(f"  warm_restart_t_0: {config.warm_restart_t_0}")
         print(f"  warm_restart_t_mult: {config.warm_restart_t_mult}")
-        print(f"  warm_restart_eta_min: {config.warm_restart_eta_min}")
+        print(f"  warm_restart_eta_min: {config.warm_restart_eta_min} ✅ INCREASED")
         print(f"  warm_restart_decay: {config.warm_restart_decay}")
-    
-    print("\nNEB PARAMETERS:")
-    print(f"  neb_images: {config.neb_images}")
-    print(f"  neb_spring_constant: {config.neb_spring_constant} eV/Å²")
-    print(f"  neb_fmax: {config.neb_fmax} eV/Å")
-    print(f"  neb_max_steps: {config.neb_max_steps}")
-    print(f"  neb_climb: {config.neb_climb}")
-    print(f"  neb_method: {config.neb_method}")
-    
-    print("\nACTIVE LEARNING:")
-    print(f"  al_initial_samples: {config.al_initial_samples}")
-    print(f"  al_n_test: {config.al_n_test}")
-    print(f"  al_test_strategy: {config.al_test_strategy}")
-    print(f"  al_n_query: {config.al_n_query}")
-    print(f"  al_query_strategy: {config.al_query_strategy}")
-    print(f"  al_max_cycles: {config.al_max_cycles}")
-    
-    print("\nCONVERGENCE CRITERIA:")
-    print(f"  al_convergence_check: {config.al_convergence_check}")
-    print(f"  al_convergence_metric: {config.al_convergence_metric}")
-    print(f"  al_convergence_threshold_mae: {config.al_convergence_threshold_mae} eV")
-    print(f"  al_convergence_patience: {config.al_convergence_patience} cycles")
     
     print("\n" + "="*70)
