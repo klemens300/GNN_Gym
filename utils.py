@@ -209,7 +209,7 @@ def load_model_for_inference(filepath: str, config, validate: bool = False):
     print(f"Loading model from: {filepath}")
     
     # Get elements and node_input_dim from Config (not checkpoint)
-    from template_graph_builder import TemplateGraphBuilder
+    from GNN_Gym.graph_builder import TemplateGraphBuilder
     builder = TemplateGraphBuilder(config)
     node_input_dim = len(builder.elements) + 4
     
@@ -418,7 +418,7 @@ def print_model_info(model, checkpoint: dict = None):
 
 if __name__ == "__main__":
     from config import Config
-    from template_graph_builder import TemplateGraphBuilder
+    from graph_builder import TemplateGraphBuilder
     
     print("="*70)
     print("UTILS MODULE (ROTATION INVARIANT)")

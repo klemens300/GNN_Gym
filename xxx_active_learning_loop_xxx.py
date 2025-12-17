@@ -23,7 +23,7 @@ from inference import (
 )
 from trainer import Trainer
 from dataset import create_dataloaders
-from template_graph_builder import TemplateGraphBuilder
+from graph_builder import GraphBuilder
 from model import create_model_from_config, count_parameters
 from utils import get_node_input_dim, save_model_for_inference, set_seed
 
@@ -253,7 +253,7 @@ def train_cycle_model(config: Config, cycle: int, logger: logging.Logger, is_fin
         if train_loader is None:
             raise RuntimeError("train_loader is None - no training data available")
         
-        builder = TemplateGraphBuilder(config)
+        builder = GraphBuilder(config)
         node_input_dim = get_node_input_dim(builder)
         model = create_model_from_config(config, node_input_dim)
         

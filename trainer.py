@@ -1,14 +1,12 @@
 """
 Trainer for Diffusion Barrier Prediction
 
-Handles training loop, validation, checkpointing, early stopping, and logging.
-Includes Cosine Warm Restarts scheduler and comprehensive MAE tracking.
-
-CORRECTIONS:
-- Removed rel_mae from wandb logging
-- Added patience_counter to wandb
-- Removed epoch from wandb logging
-- Updated scheduler parameter names
+ENHANCED WITH DIAGNOSTICS:
+- R² Score tracking
+- Prediction variance monitoring
+- Mean prediction detection
+- Gradient norm tracking
+- Comprehensive WandB logging with plots
 """
 
 import torch
@@ -19,6 +17,7 @@ import logging
 import shutil
 from typing import Optional
 import math
+import numpy as np
 
 # Wandb import (optional, graceful fallback)
 try:
@@ -27,19 +26,18 @@ try:
 except ImportError:
     WANDB_AVAILABLE = False
 
+# Scikit-learn for R² score
+try:
+    from sklearn.metrics import r2_score
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+    print("⚠️  sklearn not available - R² score will not be computed")
+
 
 def setup_logger(name: str, log_file: Path, level: str = "INFO", also_console: bool = True):
     """
     Setup a logger that writes to file and optionally console.
-    
-    Args:
-        name: Logger name
-        log_file: Path to log file
-        level: Logging level (DEBUG, INFO, WARNING, ERROR)
-        also_console: Also log to console
-    
-    Returns:
-        logger: Configured logger
     """
     logger = logging.getLogger(name)
     logger.setLevel(getattr(logging, level.upper()))
@@ -75,27 +73,6 @@ def setup_logger(name: str, log_file: Path, level: str = "INFO", also_console: b
 class CosineAnnealingWarmRestarts(torch.optim.lr_scheduler._LRScheduler):
     """
     Cosine Annealing with Warm Restarts and configurable restart behavior.
-    
-    Features:
-    - Cosine decay from initial LR to eta_min
-    - Periodic restarts with configurable period multiplication
-    - Configurable LR scaling after restart (decay, constant, or amplification)
-    
-    Args:
-        optimizer: Wrapped optimizer
-        T_0: Number of epochs for the first restart period
-        T_mult: Factor to increase period length after each restart (default: 1)
-        eta_min: Minimum learning rate
-        restart_decay: LR multiplier after restart (< 1: decay, = 1: constant, > 1: amplification)
-        last_epoch: The index of last epoch
-    
-    Example:
-        >>> scheduler = CosineAnnealingWarmRestarts(
-        ...     optimizer, T_0=100, T_mult=2, eta_min=1e-6, restart_decay=0.5
-        ... )
-        >>> # Epochs 0-100: max_lr -> eta_min (100 epochs)
-        >>> # Epochs 101-300: 0.5*max_lr -> eta_min (200 epochs, T_mult=2)
-        >>> # Epochs 301-700: 0.25*max_lr -> eta_min (400 epochs)
     """
     
     def __init__(
@@ -116,7 +93,6 @@ class CosineAnnealingWarmRestarts(torch.optim.lr_scheduler._LRScheduler):
         self.restart_count = 0
         
         # CRITICAL: Store initial LRs BEFORE calling super().__init__
-        # because super().__init__ calls step() which calls get_lr()
         self.base_lrs_initial = [group['lr'] for group in optimizer.param_groups]
         
         super().__init__(optimizer, last_epoch)
@@ -129,7 +105,6 @@ class CosineAnnealingWarmRestarts(torch.optim.lr_scheduler._LRScheduler):
         
         # Calculate cosine position in current period
         if self.T_cur == -1:
-            # First call, return base_lrs
             return self.base_lrs
         
         # Current position in period (0 to 1)
@@ -161,7 +136,7 @@ class CosineAnnealingWarmRestarts(torch.optim.lr_scheduler._LRScheduler):
         if self.T_cur >= self.T_i:
             self.T_cur = 0
             self.restart_count += 1
-            self.T_i = self.T_i * self.T_mult  # Increase period length
+            self.T_i = self.T_i * self.T_mult
             
             # Update base_lrs for next period
             for i, base_lr_initial in enumerate(self.base_lrs_initial):
@@ -176,15 +151,11 @@ class Trainer:
     """
     Trainer for GNN diffusion barrier prediction.
     
-    Features:
-    - Training and validation loops
-    - Early stopping with patience
-    - Learning rate scheduling (including Cosine Warm Restarts)
-    - Checkpoint management
-    - Comprehensive logging (file + wandb)
-    - MAE tracking (rel_mae removed from wandb)
-    - Patience counter in wandb
-    - Bar charts for best metrics
+    ENHANCED WITH:
+    - Comprehensive diagnostics
+    - Mean prediction detection
+    - R² score tracking
+    - Gradient monitoring
     """
     
     def __init__(
@@ -197,13 +168,6 @@ class Trainer:
     ):
         """
         Initialize trainer.
-        
-        Args:
-            model: Model to train
-            config: Configuration object
-            save_dir: Directory to save checkpoints
-            cycle: Active learning cycle number (optional)
-            is_final_model: Whether this is the final model training
         """
         self.model = model
         self.config = config
@@ -216,21 +180,46 @@ class Trainer:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = self.model.to(self.device)
         
+        # 🔥 cuDNN Optimization
+        if getattr(config, 'cudnn_benchmark', False) and torch.cuda.is_available():
+            import torch.backends.cudnn as cudnn
+            cudnn.benchmark = True
+            self.logger.info("✓ cuDNN benchmark enabled")
+        
+        # 🔥 Model Compilation (PyTorch 2.0+)
+        if getattr(config, 'compile_model', False) and hasattr(torch, 'compile'):
+            compile_mode = getattr(config, 'compile_mode', 'default')
+            self.logger.info(f"🔥 Compiling model (mode={compile_mode})...")
+            self.model = torch.compile(self.model, mode=compile_mode)
+            self.logger.info("✓ Model compiled!")
+        
         # Loss function
         self.criterion = self._get_loss_function()
         
-        # Optimizer
+        # 🔥 Optimizer (with optional fused mode for speed)
+        use_fused = getattr(config, 'use_fused_optimizer', False) and torch.cuda.is_available()
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(),
             lr=config.learning_rate,
-            weight_decay=config.weight_decay
+            weight_decay=config.weight_decay,
+            fused=use_fused  # 🔥 GPU-optimized if available
         )
+        if use_fused:
+            self.logger.info("✓ Using fused AdamW optimizer")
+        
+        # 🔥 Mixed Precision (AMP)
+        self.use_amp = getattr(config, 'use_amp', False) and torch.cuda.is_available()
+        if self.use_amp:
+            from torch.cuda.amp import autocast, GradScaler
+            self.scaler = GradScaler()
+            self.logger.info("✓ Mixed Precision (AMP) enabled")
+        else:
+            self.scaler = None
         
         # Learning rate scheduler
         self.scheduler = self._get_scheduler() if config.use_scheduler else None
         
         # Early stopping
-        # Use higher patience for final model
         patience = config.final_model_patience if is_final_model else config.patience
         self.patience = patience
         self.patience_counter = 0
@@ -251,22 +240,31 @@ class Trainer:
             'lr': []
         }
         
-        # Setup file logger
-        log_file = self.save_dir / "training.log"
+        # Logger
+        log_dir = Path(config.log_dir)
+        log_dir.mkdir(parents=True, exist_ok=True)
+        
+        if cycle is not None:
+            log_file = log_dir / f"training_cycle_{cycle}.log"
+        elif is_final_model:
+            log_file = log_dir / "training_final.log"
+        else:
+            log_file = log_dir / "training.log"
+        
         self.logger = setup_logger(
-            "trainer",
-            log_file,
+            name=f"trainer_{cycle if cycle is not None else 'final'}",
+            log_file=log_file,
             level=config.log_level,
             also_console=config.log_to_console
         )
         
-        # Wandb initialization
+        # Initialize wandb
         self.use_wandb = config.use_wandb and WANDB_AVAILABLE
         if self.use_wandb:
             self._init_wandb()
     
     def _get_loss_function(self):
-        """Get loss function based on config."""
+        """Get loss function from config."""
         loss_type = self.config.loss_function.lower()
         
         if loss_type == "mse":
@@ -352,30 +350,19 @@ class Trainer:
             reinit=True
         )
         
-        # Log additional metadata
-        wandb.config.update({
-            "dataset_size": n_samples,
-            "cycle": self.cycle if self.cycle is not None else "N/A",
-            "is_final_model": self.is_final_model,
-            "device": str(self.device)
-        })
+        # Upload config file if exists
+        config_file = Path("config.py")
+        if config_file.exists():
+            wandb.save(str(config_file))
+            self.logger.info("Config file uploaded to wandb")
         
-        # Watch model gradients
+        # Watch model
         if self.config.wandb_watch_model:
             wandb.watch(
                 self.model,
-                log='all',
+                log="all",
                 log_freq=self.config.wandb_watch_freq
             )
-        
-        # Save config.py to wandb
-        try:
-            config_path = Path("config.py")
-            if config_path.exists():
-                wandb.save(str(config_path))
-                self.logger.info("Config file uploaded to wandb")
-        except Exception as e:
-            self.logger.warning(f"Could not upload config.py to wandb: {e}")
         
         self.logger.info(f"Wandb initialized: {run_name}")
     
@@ -393,22 +380,68 @@ class Trainer:
             final_batch = final_batch.to(self.device)
             barriers = barriers.to(self.device).unsqueeze(1)
             
-            # Forward pass
-            predictions = self.model(initial_batch, final_batch)
-            loss = self.criterion(predictions, barriers)
+            # 🔥 Mixed Precision Forward Pass
+            if self.use_amp:
+                from torch.cuda.amp import autocast
+                with autocast():
+                    predictions = self.model(initial_batch, final_batch)
+                    loss = self.criterion(predictions, barriers)
+            else:
+                # Standard forward pass
+                predictions = self.model(initial_batch, final_batch)
+                loss = self.criterion(predictions, barriers)
             
             # Backward pass
             self.optimizer.zero_grad()
-            loss.backward()
+            
+            # 🔥 Mixed Precision Backward
+            if self.use_amp:
+                self.scaler.scale(loss).backward()
+            else:
+                loss.backward()
+            
+            # 🔥 DIAGNOSTICS: Gradient monitoring (first batch only)
+            if batch_idx == 0 and self.use_wandb:
+                total_norm = 0
+                max_norm = 0
+                min_norm = float('inf')
+                
+                for name, p in self.model.named_parameters():
+                    if p.grad is not None:
+                        param_norm = p.grad.data.norm(2).item()
+                        total_norm += param_norm ** 2
+                        max_norm = max(max_norm, param_norm)
+                        min_norm = min(min_norm, param_norm)
+                
+                total_norm = total_norm ** 0.5
+                
+                wandb.log({
+                    "diagnostics/gradient_norm_total": total_norm,
+                    "diagnostics/gradient_norm_max": max_norm,
+                    "diagnostics/gradient_norm_min": min_norm
+                })
+                
+                # Warnings
+                if total_norm < 1e-5:
+                    self.logger.warning(f"⚠️  Gradients vanishing! Norm = {total_norm:.2e}")
+                elif total_norm > 100:
+                    self.logger.warning(f"⚠️  Gradients exploding! Norm = {total_norm:.2e}")
             
             # Gradient clipping
             if self.config.gradient_clip_norm > 0:
+                if self.use_amp:
+                    self.scaler.unscale_(self.optimizer)
                 torch.nn.utils.clip_grad_norm_(
                     self.model.parameters(),
                     self.config.gradient_clip_norm
                 )
             
-            self.optimizer.step()
+            # 🔥 Mixed Precision Optimizer Step
+            if self.use_amp:
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            else:
+                self.optimizer.step()
             
             # Calculate MAE and relative MAE
             with torch.no_grad():
@@ -427,12 +460,20 @@ class Trainer:
         return avg_loss, avg_mae, avg_rel_mae
     
     def validate(self, val_loader):
-        """Validate model."""
+        """
+        Validate model with comprehensive diagnostics.
+        
+        🔥 ENHANCED: Includes R², prediction variance, scatter plots
+        """
         self.model.eval()
         total_loss = 0
         total_mae = 0
         total_rel_mae = 0
         n_batches = 0
+        
+        # 🔥 Collect all predictions and labels for diagnostics
+        all_preds = []
+        all_labels = []
         
         with torch.no_grad():
             for initial_batch, final_batch, barriers in val_loader:
@@ -453,12 +494,173 @@ class Trainer:
                 total_mae += mae.item()
                 total_rel_mae += rel_mae.item()
                 n_batches += 1
+                
+                # 🔥 Collect for diagnostics
+                all_preds.extend(predictions.cpu().numpy().flatten())
+                all_labels.extend(barriers.cpu().numpy().flatten())
         
         avg_loss = total_loss / n_batches
         avg_mae = total_mae / n_batches
         avg_rel_mae = total_rel_mae / n_batches
         
+        # ====================================================================
+        # 🔥 DIAGNOSTICS - Run every 10 epochs
+        # ====================================================================
+        if self.use_wandb and self.current_epoch % 10 == 0:
+            self._log_diagnostics(all_preds, all_labels)
+        
         return avg_loss, avg_mae, avg_rel_mae
+    
+    def _log_diagnostics(self, all_preds, all_labels):
+        """
+        Log comprehensive diagnostics to WandB.
+        
+        Detects if model is stuck predicting mean!
+        """
+        pred_array = np.array(all_preds)
+        label_array = np.array(all_labels)
+        
+        # ----------------------------------------------------------------
+        # 1. R² Score (MOST IMPORTANT!)
+        # ----------------------------------------------------------------
+        if SKLEARN_AVAILABLE:
+            r2 = r2_score(label_array, pred_array)
+        else:
+            # Manual R² calculation
+            ss_res = np.sum((label_array - pred_array) ** 2)
+            ss_tot = np.sum((label_array - label_array.mean()) ** 2)
+            r2 = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
+        
+        # ----------------------------------------------------------------
+        # 2. Prediction Statistics
+        # ----------------------------------------------------------------
+        pred_mean = pred_array.mean()
+        pred_std = pred_array.std()
+        pred_min = pred_array.min()
+        pred_max = pred_array.max()
+        
+        # ----------------------------------------------------------------
+        # 3. Dataset Statistics (for comparison)
+        # ----------------------------------------------------------------
+        dataset_mean = label_array.mean()
+        dataset_std = label_array.std()
+        
+        # ----------------------------------------------------------------
+        # 4. Deviation from Mean
+        # ----------------------------------------------------------------
+        mean_deviation = np.abs(pred_array - dataset_mean)
+        mean_dev_avg = mean_deviation.mean()
+        mean_dev_max = mean_deviation.max()
+        
+        # ----------------------------------------------------------------
+        # 5. Residuals
+        # ----------------------------------------------------------------
+        residuals = pred_array - label_array
+        residuals_mean = residuals.mean()
+        residuals_std = residuals.std()
+        
+        # ----------------------------------------------------------------
+        # 6. Check if stuck
+        # ----------------------------------------------------------------
+        is_stuck = False
+        stuck_reasons = []
+        
+        if r2 < 0.05:
+            is_stuck = True
+            stuck_reasons.append(f"R²={r2:.4f} < 0.05")
+        
+        if pred_std < 0.01:
+            is_stuck = True
+            stuck_reasons.append(f"Pred_Std={pred_std:.4f} < 0.01")
+        
+        if mean_dev_avg < 0.02:
+            is_stuck = True
+            stuck_reasons.append(f"Mean_Dev={mean_dev_avg:.4f} < 0.02")
+        
+        # ----------------------------------------------------------------
+        # 7. Log to WandB
+        # ----------------------------------------------------------------
+        log_dict = {
+            # === Core Metrics ===
+            "diagnostics/r2_score": r2,
+            "diagnostics/is_stuck": 1 if is_stuck else 0,
+            
+            # === Prediction Stats ===
+            "diagnostics/pred_mean": pred_mean,
+            "diagnostics/pred_std": pred_std,
+            "diagnostics/pred_min": pred_min,
+            "diagnostics/pred_max": pred_max,
+            "diagnostics/pred_range": pred_max - pred_min,
+            
+            # === Dataset Stats (reference) ===
+            "diagnostics/dataset_mean": dataset_mean,
+            "diagnostics/dataset_std": dataset_std,
+            
+            # === Deviation from Mean ===
+            "diagnostics/mean_deviation_avg": mean_dev_avg,
+            "diagnostics/mean_deviation_max": mean_dev_max,
+            
+            # === Residuals ===
+            "diagnostics/residuals_mean": residuals_mean,
+            "diagnostics/residuals_std": residuals_std,
+            
+            # === Histograms ===
+            "diagnostics/prediction_histogram": wandb.Histogram(pred_array),
+            "diagnostics/residuals_histogram": wandb.Histogram(residuals),
+        }
+        
+        # Add scatter plot (sample 1000 points to avoid huge plots)
+        sample_size = min(1000, len(pred_array))
+        indices = np.random.choice(len(pred_array), sample_size, replace=False)
+        
+        log_dict["diagnostics/prediction_scatter"] = wandb.plot.scatter(
+            wandb.Table(
+                data=[[label_array[i], pred_array[i]] for i in indices],
+                columns=["True", "Predicted"]
+            ),
+            "True", "Predicted",
+            title=f"Predictions vs True (Epoch {self.current_epoch}, R²={r2:.3f})"
+        )
+        
+        wandb.log(log_dict)
+        
+        # ----------------------------------------------------------------
+        # 8. Log warnings
+        # ----------------------------------------------------------------
+        if is_stuck:
+            warning_msg = f"⚠️  MODEL STUCK AT MEAN! Reasons: {', '.join(stuck_reasons)}"
+            self.logger.warning(warning_msg)
+            
+            # Alert in wandb
+            if hasattr(wandb, 'alert'):
+                wandb.alert(
+                    title="Model Stuck at Mean",
+                    text=warning_msg,
+                    level=wandb.AlertLevel.WARN
+                )
+        else:
+            self.logger.info(
+                f"✅ Model learning! R²={r2:.4f}, Pred_Std={pred_std:.4f}"
+            )
+        
+        # ----------------------------------------------------------------
+        # 9. Print diagnostic summary
+        # ----------------------------------------------------------------
+        print("\n" + "="*70)
+        print(f"📊 DIAGNOSTICS (Epoch {self.current_epoch})")
+        print("="*70)
+        print(f"R² Score:           {r2:.4f}  {'❌ STUCK!' if r2 < 0.05 else '✅'}")
+        print(f"Pred Mean:          {pred_mean:.4f}  (Dataset: {dataset_mean:.4f})")
+        print(f"Pred Std Dev:       {pred_std:.4f}  {'❌ Too low!' if pred_std < 0.01 else '✅'}")
+        print(f"Pred Range:         [{pred_min:.4f}, {pred_max:.4f}]")
+        print(f"Mean Deviation:     {mean_dev_avg:.4f}  {'❌ Too low!' if mean_dev_avg < 0.02 else '✅'}")
+        print(f"Residuals Std:      {residuals_std:.4f}")
+        
+        if is_stuck:
+            print(f"\n⚠️  WARNING: Model appears stuck at mean!")
+            print(f"   Consider: Increase learning rate or reduce batch size")
+        
+        print("="*70 + "\n")
     
     def save_checkpoint(self, filepath: str, is_best: bool = False):
         """Save checkpoint."""
@@ -470,10 +672,7 @@ class Trainer:
             'best_val_mae': self.best_val_mae,
             'best_val_rel_mae': self.best_val_rel_mae,
             'best_train_mae': self.best_train_mae,
-            'history': self.history,
-            'config': vars(self.config),
-            'cycle': self.cycle,
-            'is_final_model': self.is_final_model
+            'history': self.history
         }
         
         if self.scheduler is not None:
@@ -508,13 +707,7 @@ class Trainer:
         """
         Main training loop.
         
-        Args:
-            train_loader: Training data loader
-            val_loader: Validation data loader (optional)
-            verbose: Print progress
-        
-        Returns:
-            history: Training history dict
+        🔥 ENHANCED: With diagnostics every 10 epochs
         """
         self.logger.info("="*70)
         self.logger.info("TRAINING START")
@@ -572,10 +765,7 @@ class Trainer:
                     f"LR: {current_lr:.2e}"
                 )
             
-            # ========== CORRECTED: Wandb logging ==========
-            # - Removed rel_mae metrics
-            # - Added patience_counter
-            # - Removed epoch counter
+            # Log to WandB
             if self.use_wandb and epoch % self.config.wandb_log_interval == 0:
                 wandb.log({
                     'train/loss': train_loss,
@@ -587,7 +777,6 @@ class Trainer:
                     'best/train_mae': self.best_train_mae,
                     'best/val_mae': self.best_val_mae
                 })
-            # =============================================
             
             # Learning rate scheduling
             if self.scheduler is not None:
@@ -606,7 +795,7 @@ class Trainer:
                 self.save_checkpoint(str(checkpoint_path), is_best=True)
                 
                 if verbose:
-                    self.logger.info(f"  ? New best model! Val loss: {val_loss:.4f}")
+                    self.logger.info(f"  ✓ New best model! Val loss: {val_loss:.4f}")
             else:
                 self.patience_counter += 1
                 
@@ -669,31 +858,30 @@ class Trainer:
             self.logger.warning(f"Could not create bar chart: {e}")
 
 
-# Example usage
 if __name__ == "__main__":
     print("="*70)
-    print("TRAINER MODULE (UPDATED)")
+    print("TRAINER MODULE (WITH DIAGNOSTICS)")
     print("="*70)
     
-    print("\nUPDATES:")
-    print("  ? Updated scheduler parameter names")
-    print("  ? plateau_factor, plateau_patience")
-    print("  ? step_size, step_gamma")
-    print("  ? cosine_t_max, cosine_eta_min")
-    print("  ? warm_restart_t_0, warm_restart_t_mult, etc.")
+    print("\n🔥 ENHANCED FEATURES:")
+    print("  ✅ R² Score tracking")
+    print("  ✅ Prediction variance monitoring")
+    print("  ✅ Mean prediction detection")
+    print("  ✅ Gradient norm tracking")
+    print("  ✅ Scatter plots & histograms")
+    print("  ✅ Automatic stuck detection")
     
-    print("\nFeatures:")
-    print("  - Training and validation loops")
-    print("  - Early stopping with patience")
-    print("  - Learning rate scheduling:")
-    print("    * ReduceLROnPlateau")
-    print("    * CosineAnnealingLR")
-    print("    * CosineAnnealingWarmRestarts")
-    print("    * StepLR")
-    print("  - Checkpoint management")
-    print("  - Comprehensive logging (file + wandb)")
-    print("  - MAE tracking")
-    print("  - Bar charts for best metrics")
-    print("  - Config file upload to wandb")
+    print("\n📊 DIAGNOSTIC METRICS:")
+    print("  - diagnostics/r2_score")
+    print("  - diagnostics/pred_std")
+    print("  - diagnostics/mean_deviation_avg")
+    print("  - diagnostics/gradient_norm_total")
+    print("  - diagnostics/prediction_scatter")
+    print("  - diagnostics/is_stuck (0 or 1)")
+    
+    print("\n⚠️  ALERTS:")
+    print("  - R² < 0.05 → Model stuck at mean!")
+    print("  - Pred_Std < 0.01 → All predictions identical!")
+    print("  - Gradient_Norm < 1e-5 → Gradients vanishing!")
     
     print("\n" + "="*70)

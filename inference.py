@@ -32,7 +32,7 @@ from tqdm import tqdm
 from config import Config
 from oracle import Oracle
 from utils import load_model_for_inference
-from template_graph_builder import TemplateGraphBuilder
+from graph_builder import GraphBuilder
 
 
 # ============================================================================
@@ -238,7 +238,7 @@ def predict_barriers_for_test_set(
     model = model.to(device)
     
     # Build graph builder
-    builder = TemplateGraphBuilder(config, csv_path=config.csv_path)
+    builder = GraphBuilder(config, csv_path=config.csv_path)
     
     predictions = []
     
