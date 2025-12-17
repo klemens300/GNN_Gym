@@ -88,7 +88,6 @@ class DiffusionBarrierDataset(Dataset):
     def __len__(self) -> int:
         """Number of samples in dataset"""
         return len(self.df)
-    
     def __getitem__(self, idx: int) -> tuple:
         """
         Get single sample.
@@ -107,6 +106,13 @@ class DiffusionBarrierDataset(Dataset):
         
         # Get CIF paths
         structure_folder = Path(row['structure_folder'])
+        
+        # ✅ FIX: Make path absolute if it's relative
+        if not structure_folder.is_absolute():
+            # Get parent directory of CSV file
+            csv_parent = Path(self.csv_path).parent
+            structure_folder = csv_parent / structure_folder
+        
         initial_cif = structure_folder / "initial_relaxed.cif"
         final_cif = structure_folder / "final_relaxed.cif"
         

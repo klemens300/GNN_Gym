@@ -16,9 +16,15 @@ class Config:
     # ============================================================
     # PATHS
     # ============================================================
-    csv_path: str = "MoNbTaW.csv"
+    csv_path: str = "/home/klemens/databases/MoNbTaW.csv"
     checkpoint_dir: str = "checkpoints"
-    database_dir: str = "MoNbTaW"          # Directory for structure files
+    database_dir: str = "/home/klemens/databases/MoNbTaW"          # Directory for structure files
+
+    # ============================================================
+    # TRAINING MODE
+    # ============================================================
+    train_only_mode: bool = True        # Skip AL loop, only train final model
+    train_only_skip_cycles: bool = True  # Skip cycle training, only final model
     
     # ============================================================
     # CALCULATOR SETTINGS
@@ -56,7 +62,11 @@ class Config:
     # ============================================================
     cutoff_radius: float = 3.5           # Neighbor cutoff radius (Angstrom)
     max_neighbors: int = 50              # Maximum neighbors per atom
-    
+
+    # Line Graph (ALIGNN-style) for bond angles
+    use_line_graph: bool = True          # Enable line graph
+    line_graph_cutoff: float = 3.5 
+
     # ============================================================
     # DATA
     # ============================================================
@@ -74,11 +84,17 @@ class Config:
     # ============================================================
     # MODEL ARCHITECTURE
     # ============================================================
-    # GNN Encoder
+    # Atom Graph (GNN Encoder)
     gnn_hidden_dim: int = 64             # Hidden dimension for GNN layers
     gnn_num_layers: int = 5              # Number of message passing layers
     gnn_embedding_dim: int = 64          # Output dimension of GNN encoder
-    
+
+    # Line Graph (for bond angles)
+    use_line_graph: bool = True          # Use ALIGNN-style line graph
+    line_graph_hidden_dim: int = 64      # Hidden dimension for line graph layers
+    line_graph_num_layers: int = 3       # Number of line graph message passing layers
+    line_graph_embedding_dim: int = 64   # Output dimension of line graph
+
     # MLP Predictor
     mlp_hidden_dims: List[int] = field(default_factory=lambda: [512, 256, 128])
     dropout: float = 0.1                 # Dropout rate
