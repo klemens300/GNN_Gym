@@ -1,13 +1,5 @@
 """
 Configuration for Diffusion Barrier Prediction
-
-
-Changes:
-1. Correct input_dim for new GraphBuilder (12 features not 8)
-2. Larger batch sizes (GPU utilization)
-3. Mixed Precision enabled
-4. More workers + prefetch
-5. Optimized for 32GB VRAM
 """
 
 from dataclasses import dataclass, field
@@ -17,7 +9,6 @@ from datetime import datetime
 
 @dataclass
 class Config:
-    """Complete configuration - RTX 5090 OPTIMIZED"""
     
     # ============================================================
     # PATHS
@@ -29,8 +20,8 @@ class Config:
     # ============================================================
     # TRAINING MODE
     # ============================================================
-    train_only_mode: bool = True
-    train_only_skip_cycles: bool = True
+    train_only_mode: bool = False
+    train_only_skip_cycles: bool = False
     
     # ============================================================
     # CALCULATOR SETTINGS
@@ -61,9 +52,9 @@ class Config:
     # ============================================================
     # DATA 
     # ============================================================
-    batch_size: int = 128           # 
-    batch_size_val: int = 128        # 
-    num_workers: int = 6            #  
+    batch_size: int = 128            
+    batch_size_val: int = 128         
+    num_workers: int = 16              
     
     # Data cleanup (barrier filtering)
     min_barrier: float = 0.0
@@ -76,10 +67,6 @@ class Config:
     # ============================================================
     # MODEL ARCHITECTURE - 
     # ============================================================
-    # Input dimension: 4 (one-hot) + 8 (properties) = 12
-    # Properties: atomic_number, atomic_mass, atomic_radius, 
-    #             electronegativity, first_ionization, electron_affinity,
-    #             melting_point, density
     
     # Atom Graph (GNN Encoder)
     gnn_hidden_dim: int = 64
@@ -106,35 +93,35 @@ class Config:
     
     # Training loop
     epochs: int = 10000
-    patience: int = 120
+    patience: int = 80
     save_interval: int = 50
-    final_model_patience: int = 666
+    final_model_patience: int = 150
     
     # ============================================================
-    # OPTIMIZER - 🔥 FUSED FOR SPEED
+    # OPTIMIZER
     # ============================================================
-    use_fused_optimizer: bool = True  # 🔥 NEW! GPU-optimized AdamW
+    use_fused_optimizer: bool = True 
     
     # ============================================================
-    # MIXED PRECISION - 🔥 30-50% SPEEDUP!
+    # MIXED PRECISION
     # ============================================================
-    use_amp: bool = True              # 🔥 NEW! Automatic Mixed Precision (FP16)
+    use_amp: bool = True     
     
     # ============================================================
-    # MODEL COMPILATION - 🔥 10-30% SPEEDUP
+    # MODEL COMPILATION
     # ============================================================
-    compile_model: bool = False        # 🔥 NEW! torch.compile (PyTorch 2.0+)
-    compile_mode: str = 'reduce-overhead'  # Options: default, reduce-overhead, max-autotune
+    compile_model: bool = False     
+    compile_mode: str = 'reduce-overhead' 
     
     # ============================================================
     # CUDNN OPTIMIZATION
     # ============================================================
-    cudnn_benchmark: bool = True      # 🔥 NEW! Auto-tune convolutions
+    cudnn_benchmark: bool = True 
     
     # ============================================================
     # DATALOADER OPTIMIZATION
     # ============================================================
-    prefetch_factor: int = 6          
+    prefetch_factor: int = 4          
     drop_last: bool = True            
     
     # ============================================================
@@ -155,10 +142,10 @@ class Config:
     cosine_t_max: int = 100
     cosine_eta_min: float = 1e-6
     
-    # --- CosineAnnealingWarmRestarts - 
+    # --- CosineAnnealingWarmRestarts --- 
     warm_restart_t_0: int = 500
     warm_restart_t_mult: float = 1.2
-    warm_restart_eta_min: float = 1e-4  # 
+    warm_restart_eta_min: float = 1e-4  
     warm_restart_decay: float = 0.9
     
     # ============================================================
@@ -182,8 +169,8 @@ class Config:
     # ============================================================
     # ACTIVE LEARNING
     # ============================================================
-    al_initial_samples: int = 20000
-    al_n_test: int = 4000
+    al_initial_samples: int = 5000
+    al_n_test: int = 1000
     al_test_strategy: str = 'uniform'
     al_n_query: int = 1000
     al_query_strategy: str = 'error_weighted'
@@ -193,7 +180,7 @@ class Config:
     al_convergence_metric: str = "mae"
     al_convergence_threshold_mae: float = 0.01
     al_convergence_threshold_rel_mae: float = 0.1
-    al_convergence_patience: int = 20
+    al_convergence_patience: int = 2000
     al_results_dir: str = "active_learning_results"
     
     # ============================================================
@@ -212,11 +199,11 @@ class Config:
     # WEIGHTS & BIASES
     # ============================================================
     use_wandb: bool = True
-    wandb_project: str = "GNN_Gym_MoNbTaW_RTX5090_RealGeometry"  # 🔥 New project
+    wandb_project: str = "MoNbTaW"
     wandb_entity: str = None
     wandb_run_name: str = None
     wandb_tags: List[str] = field(default_factory=list)
-    wandb_notes: str = "RTX 5090 optimized: Batch 384, LR 6e-3, AMP, Compile, Real Geometry"
+    wandb_notes: str = "."
     wandb_log_interval: int = 1
     wandb_watch_model: bool = True
     wandb_watch_freq: int = 10
@@ -227,13 +214,16 @@ class Config:
         mlp_str = "-".join(map(str, self.mlp_hidden_dims))
         scheduler = self.scheduler_type if self.use_scheduler else "none"
         
-        parts = [timestamp, "RTX5090-OPT"]
+        # Element string for identification
+        elements_str = "".join(sorted(self.elements))
+        
+        parts = [timestamp, elements_str]
         
         if n_samples is not None:
-            parts.append(f"samples{n_samples}")
+            parts.append(f"N{n_samples}")
         
         if cycle is not None:
-            parts.append(f"cycle{cycle}")
+            parts.append(f"C{cycle}")
         
         parts.append(f"B{self.batch_size}")
         parts.append(f"GNN-{self.gnn_num_layers}x{self.gnn_hidden_dim}")
