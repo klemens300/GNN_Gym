@@ -93,7 +93,7 @@ def get_node_input_dim(builder) -> int:
         >>> dim = get_node_input_dim(builder)
         >>> print(f"Node input dim: {dim}")
     """
-    return len(builder.elements) + 4
+    return len(builder.elements) + 8
 
 
 # ============================================================================

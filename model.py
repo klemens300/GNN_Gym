@@ -142,7 +142,7 @@ class ALIGNNEncoder(nn.Module):
         self,
         atom_node_dim: int,
         atom_edge_dim: int = 1,
-        line_node_dim: int = 3,
+        line_node_dim: int = 4,
         line_edge_dim: int = 1,
         atom_hidden_dim: int = 64,
         line_hidden_dim: int = 64,
@@ -314,12 +314,12 @@ class DualALIGNNEncoder(nn.Module):
         self,
         atom_node_dim: int,
         atom_edge_dim: int = 1,
-        line_node_dim: int = 3,
+        line_node_dim: int = 4,
         line_edge_dim: int = 1,
         atom_hidden_dim: int = 64,
         line_hidden_dim: int = 64,
         atom_num_layers: int = 5,
-        line_num_layers: int = 3,
+        line_num_layers: int = 4,
         embedding_dim: int = 64,
         use_line_graph: bool = True
     ):
@@ -544,7 +544,7 @@ class DiffusionBarrierModel(nn.Module):
         self.encoder = DualALIGNNEncoder(
             atom_node_dim=node_input_dim,
             atom_edge_dim=edge_input_dim,
-            line_node_dim=3,  # Bond vectors (3D)
+            line_node_dim=4,  # Bond vectors (3D)
             line_edge_dim=1,  # Angles
             atom_hidden_dim=gnn_hidden_dim,
             line_hidden_dim=line_graph_hidden_dim,

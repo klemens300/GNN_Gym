@@ -180,6 +180,47 @@ class Trainer:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = self.model.to(self.device)
         
+        # Early stopping
+        patience = config.final_model_patience if is_final_model else config.patience
+        self.patience = patience
+        self.patience_counter = 0
+        self.best_val_loss = float('inf')
+        self.best_val_mae = float('inf')
+        self.best_val_rel_mae = float('inf')
+        self.best_train_mae = float('inf')
+        
+        # Tracking
+        self.current_epoch = 0
+        self.history = {
+            'train_loss': [],
+            'val_loss': [],
+            'train_mae': [],
+            'val_mae': [],
+            'train_rel_mae': [],
+            'val_rel_mae': [],
+            'lr': []
+        }
+        
+        # Logger (CREATE FIRST!)
+        log_dir = Path(config.log_dir)
+        log_dir.mkdir(parents=True, exist_ok=True)
+        
+        if cycle is not None:
+            log_file = log_dir / f"training_cycle_{cycle}.log"
+        elif is_final_model:
+            log_file = log_dir / "training_final.log"
+        else:
+            log_file = log_dir / "training.log"
+        
+        self.logger = setup_logger(
+            name=f"trainer_{cycle if cycle is not None else 'final'}",
+            log_file=log_file,
+            level=config.log_level,
+            also_console=config.log_to_console
+        )
+        
+        # 🔥 NOW we can use logger for optimizations!
+        
         # 🔥 cuDNN Optimization
         if getattr(config, 'cudnn_benchmark', False) and torch.cuda.is_available():
             import torch.backends.cudnn as cudnn
@@ -218,45 +259,6 @@ class Trainer:
         
         # Learning rate scheduler
         self.scheduler = self._get_scheduler() if config.use_scheduler else None
-        
-        # Early stopping
-        patience = config.final_model_patience if is_final_model else config.patience
-        self.patience = patience
-        self.patience_counter = 0
-        self.best_val_loss = float('inf')
-        self.best_val_mae = float('inf')
-        self.best_val_rel_mae = float('inf')
-        self.best_train_mae = float('inf')
-        
-        # Tracking
-        self.current_epoch = 0
-        self.history = {
-            'train_loss': [],
-            'val_loss': [],
-            'train_mae': [],
-            'val_mae': [],
-            'train_rel_mae': [],
-            'val_rel_mae': [],
-            'lr': []
-        }
-        
-        # Logger
-        log_dir = Path(config.log_dir)
-        log_dir.mkdir(parents=True, exist_ok=True)
-        
-        if cycle is not None:
-            log_file = log_dir / f"training_cycle_{cycle}.log"
-        elif is_final_model:
-            log_file = log_dir / "training_final.log"
-        else:
-            log_file = log_dir / "training.log"
-        
-        self.logger = setup_logger(
-            name=f"trainer_{cycle if cycle is not None else 'final'}",
-            log_file=log_file,
-            level=config.log_level,
-            also_console=config.log_to_console
-        )
         
         # Initialize wandb
         self.use_wandb = config.use_wandb and WANDB_AVAILABLE

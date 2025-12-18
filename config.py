@@ -1,7 +1,6 @@
 """
 Configuration for Diffusion Barrier Prediction
 
-🔥 RTX 5090 OPTIMIZED + FIXED FEATURE DIMENSIONS
 
 Changes:
 1. Correct input_dim for new GraphBuilder (12 features not 8)
@@ -60,11 +59,11 @@ class Config:
     line_graph_cutoff: float = 3.5 
 
     # ============================================================
-    # DATA - 🔥 OPTIMIZED FOR RTX 5090
+    # DATA 
     # ============================================================
-    batch_size: int = 384            # 🔥 Larger! (was 256)
-    batch_size_val: int = 512        # 🔥 Val even larger (no backward!)
-    num_workers: int = 16            # 🔥 All CPU threads (was 12)
+    batch_size: int = 128           # 
+    batch_size_val: int = 128        # 
+    num_workers: int = 6            #  
     
     # Data cleanup (barrier filtering)
     min_barrier: float = 0.0
@@ -75,7 +74,7 @@ class Config:
     random_seed: int = 42
     
     # ============================================================
-    # MODEL ARCHITECTURE - 🔥 FIXED INPUT DIM!
+    # MODEL ARCHITECTURE - 
     # ============================================================
     # Input dimension: 4 (one-hot) + 8 (properties) = 12
     # Properties: atomic_number, atomic_mass, atomic_radius, 
@@ -98,10 +97,10 @@ class Config:
     dropout: float = 0.1
     
     # ============================================================
-    # TRAINING - 🔥 OPTIMIZED FOR LARGE BATCHES
+    # TRAINING - 
     # ============================================================
     # Optimization
-    learning_rate: float = 6e-3      # 🔥 1.5x higher for batch 384 (was 4e-3)
+    learning_rate: float = 1e-3    
     weight_decay: float = 0.01
     gradient_clip_norm: float = 1.0
     
@@ -124,7 +123,7 @@ class Config:
     # ============================================================
     # MODEL COMPILATION - 🔥 10-30% SPEEDUP
     # ============================================================
-    compile_model: bool = True        # 🔥 NEW! torch.compile (PyTorch 2.0+)
+    compile_model: bool = False        # 🔥 NEW! torch.compile (PyTorch 2.0+)
     compile_mode: str = 'reduce-overhead'  # Options: default, reduce-overhead, max-autotune
     
     # ============================================================
@@ -135,11 +134,11 @@ class Config:
     # ============================================================
     # DATALOADER OPTIMIZATION
     # ============================================================
-    prefetch_factor: int = 4          # 🔥 NEW! Preload batches
-    drop_last: bool = True            # 🔥 NEW! Consistent batch sizes
+    prefetch_factor: int = 6          
+    drop_last: bool = True            
     
     # ============================================================
-    # LEARNING RATE SCHEDULER - 🔥 ADJUSTED
+    # LEARNING RATE SCHEDULER - 
     # ============================================================
     use_scheduler: bool = True
     scheduler_type: str = "cosine_warm_restarts"
@@ -156,10 +155,10 @@ class Config:
     cosine_t_max: int = 100
     cosine_eta_min: float = 1e-6
     
-    # --- CosineAnnealingWarmRestarts - 🔥 ADJUSTED ---
+    # --- CosineAnnealingWarmRestarts - 
     warm_restart_t_0: int = 500
     warm_restart_t_mult: float = 1.2
-    warm_restart_eta_min: float = 6e-4  # 🔥 Scaled up (was 4e-4)
+    warm_restart_eta_min: float = 1e-4  # 
     warm_restart_decay: float = 0.9
     
     # ============================================================
@@ -251,15 +250,13 @@ class Config:
     def get_experiment_name(self, n_samples: int = None, cycle: int = None) -> str:
         """Generate experiment name for wandb."""
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        parts = [timestamp, "B384-AMP"]
+        parts = [timestamp]
         
         if n_samples is not None:
             parts.append(f"samples{n_samples}")
         
         if cycle is not None:
             parts.append(f"cycle{cycle}")
-        
-        parts.append("GNN-REAL-GEOM")
         
         return "-".join(parts)
 
