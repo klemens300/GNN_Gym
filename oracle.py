@@ -629,6 +629,26 @@ class Oracle:
             # Save NEB images
             for i, img in enumerate(neb_images):
                 write(run_dir / f"neb_image_{i}.cif", img)
+
+            import numpy as np
+
+            def save_structure_as_npz(atoms, npz_path):
+                """Save ASE atoms as NPZ."""
+                np.savez_compressed(
+                    npz_path,
+                    positions=atoms.positions,
+                    numbers=atoms.numbers,
+                    cell=atoms.cell.array,
+                    pbc=atoms.pbc
+                )
+
+            save_structure_as_npz(initial_unrelaxed, run_dir / "initial_unrelaxed.npz")
+            save_structure_as_npz(initial_relaxed, run_dir / "initial_relaxed.npz")
+            save_structure_as_npz(final_unrelaxed, run_dir / "final_unrelaxed.npz")
+            save_structure_as_npz(final_relaxed, run_dir / "final_relaxed.npz")
+
+            for i, img in enumerate(neb_images):
+                save_structure_as_npz(img, run_dir / f"neb_image_{i}.npz")
             
             # Save results.json
             results = {

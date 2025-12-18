@@ -13,9 +13,9 @@ class Config:
     # ============================================================
     # PATHS
     # ============================================================
-    csv_path: str = "/home/klemens/databases/MoNbTaW.csv"
-    checkpoint_dir: str = "checkpoints"
-    database_dir: str = "/home/klemens/databases/MoNbTaW"
+    csv_path: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN/databases/MoNbCrV.csv"
+    checkpoint_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN/production/MoNbCrV/GNN_Gym/checkpoints"
+    database_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN/databases/MoNbCrV"
 
     # ============================================================
     # TRAINING MODE
@@ -33,7 +33,7 @@ class Config:
     # ============================================================
     # MATERIAL SYSTEM (Elements)
     # ============================================================
-    elements: List[str] = field(default_factory=lambda: ['Mo', 'Nb', 'Ta', 'W'])
+    elements: List[str] = field(default_factory=lambda: ['Mo', 'Nb', 'Cr', 'V'])
     
     # ============================================================
     # CRYSTAL STRUCTURE
@@ -93,9 +93,9 @@ class Config:
     
     # Training loop
     epochs: int = 10000
-    patience: int = 80
+    patience: int = 120
     save_interval: int = 50
-    final_model_patience: int = 150
+    final_model_patience: int = 200
     
     # ============================================================
     # OPTIMIZER
@@ -199,7 +199,7 @@ class Config:
     # WEIGHTS & BIASES
     # ============================================================
     use_wandb: bool = True
-    wandb_project: str = "MoNbTaW"
+    wandb_project: str = "MoNbCrV"
     wandb_entity: str = None
     wandb_run_name: str = None
     wandb_tags: List[str] = field(default_factory=list)

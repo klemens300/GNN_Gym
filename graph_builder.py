@@ -171,10 +171,7 @@ class GraphBuilder:
         """
         Read structure with NPZ fallback and optional caching.
         
-        🔥 ULTRA-FAST:
-        1. Check RAM cache (instant)
-        2. Try NPZ file (~2-5 ms)
-        3. Fallback to CIF (~35 ms)
+        NEW: Automatically creates NPZ if it doesn't exist.
         
         Parameters:
         -----------
@@ -206,11 +203,36 @@ class GraphBuilder:
         # 3. Fallback to CIF (slow but reliable)
         atoms = ase_read(file_path)
         
+        # NEW: Create NPZ for next time
+        try:
+            self._save_structure_as_npz(atoms, str(npz_path))
+        except Exception as e:
+            warnings.warn(f"Could not create NPZ file {npz_path}: {e}")
+        
         # Cache in RAM
         if self.use_cache:
             self._structure_cache[file_path] = atoms
         
         return atoms.copy()
+
+    def _save_structure_as_npz(self, atoms: Atoms, npz_path: str):
+        """
+        Save ASE atoms as NPZ (on-the-fly conversion).
+        
+        Parameters:
+        -----------
+        atoms : ASE Atoms
+            Structure to save
+        npz_path : str
+            Path for NPZ file
+        """
+        np.savez_compressed(
+            npz_path,
+            positions=atoms.positions,
+            numbers=atoms.numbers,
+            cell=atoms.cell.array,
+            pbc=atoms.pbc
+        )
     
     def _compute_edges_from_positions(
         self,

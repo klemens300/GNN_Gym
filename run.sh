@@ -11,6 +11,7 @@
 #SBATCH --time 7-0:0:0
 #SBATCH -o slurm_output_%j.out
 #SBATCH -e slurm_error_%j.err
+#SBATCH --nodelist=hpc-p2gpu-001
 #---
 ulimit -s unlimited
 
