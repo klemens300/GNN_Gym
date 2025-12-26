@@ -7,6 +7,7 @@ Handles:
 - Structure relaxation using CHGNet or FAIRChem
 - NEB calculations
 - Data storage with run numbering per composition
+- NPZ file creation for fast loading
 
 Supports multiple calculators:
 - CHGNet: Pre-trained universal model
@@ -62,6 +63,7 @@ class Oracle:
     5. Relax final structure
     6. Run NEB between initial and final
     7. Save everything (structures, energies, barriers)
+    8. Save NPZ files for fast loading
     """
     
     def __init__(self, config):
@@ -394,6 +396,25 @@ class Oracle:
         
         return neighbor_indices
     
+    def _save_structure_as_npz(self, atoms, npz_path):
+        """
+        Save ASE atoms as NPZ for fast loading.
+        
+        Parameters:
+        -----------
+        atoms : ase.Atoms
+            Structure to save
+        npz_path : str or Path
+            Path for NPZ file
+        """
+        np.savez_compressed(
+            npz_path,
+            positions=atoms.positions,
+            numbers=atoms.numbers,
+            cell=atoms.cell.array,
+            pbc=atoms.pbc
+        )
+    
     def _relax_structure(self, atoms):
         """
         Relax structure using configured calculator (SILENT MODE).
@@ -565,7 +586,7 @@ class Oracle:
         5. Move neighbor to vacancy ? final structure
         6. Relax final structure
         7. Run NEB
-        8. Save everything
+        8. Save everything (CIF + NPZ)
         
         Parameters:
         -----------
@@ -620,35 +641,25 @@ class Oracle:
             run_dir = self.database_dir / comp_string / f"run_{run_number}"
             run_dir.mkdir(parents=True, exist_ok=True)
             
-            # Save structures
+            # Save structures (CIF)
             write(run_dir / "initial_unrelaxed.cif", initial_unrelaxed)
             write(run_dir / "initial_relaxed.cif", initial_relaxed)
             write(run_dir / "final_unrelaxed.cif", final_unrelaxed)
             write(run_dir / "final_relaxed.cif", final_relaxed)
             
-            # Save NEB images
+            # Save NEB images (CIF)
             for i, img in enumerate(neb_images):
                 write(run_dir / f"neb_image_{i}.cif", img)
-
-            import numpy as np
-
-            def save_structure_as_npz(atoms, npz_path):
-                """Save ASE atoms as NPZ."""
-                np.savez_compressed(
-                    npz_path,
-                    positions=atoms.positions,
-                    numbers=atoms.numbers,
-                    cell=atoms.cell.array,
-                    pbc=atoms.pbc
-                )
-
-            save_structure_as_npz(initial_unrelaxed, run_dir / "initial_unrelaxed.npz")
-            save_structure_as_npz(initial_relaxed, run_dir / "initial_relaxed.npz")
-            save_structure_as_npz(final_unrelaxed, run_dir / "final_unrelaxed.npz")
-            save_structure_as_npz(final_relaxed, run_dir / "final_relaxed.npz")
-
+            
+            # NEW: Save structures (NPZ) for fast loading
+            self._save_structure_as_npz(initial_unrelaxed, run_dir / "initial_unrelaxed.npz")
+            self._save_structure_as_npz(initial_relaxed, run_dir / "initial_relaxed.npz")
+            self._save_structure_as_npz(final_unrelaxed, run_dir / "final_unrelaxed.npz")
+            self._save_structure_as_npz(final_relaxed, run_dir / "final_relaxed.npz")
+            
+            # Save NEB images (NPZ)
             for i, img in enumerate(neb_images):
-                save_structure_as_npz(img, run_dir / f"neb_image_{i}.npz")
+                self._save_structure_as_npz(img, run_dir / f"neb_image_{i}.npz")
             
             # Save results.json
             results = {

@@ -1,4 +1,4 @@
-# === Active Learning Loop with Convergence Checking and Final Model Training ===
+# === Active Learning Loop - SIMPLIFIED LOGGING ===
 # Console: English; Comments: English
 
 import sys
@@ -6,7 +6,6 @@ import traceback
 import logging
 from pathlib import Path
 from datetime import datetime
-import shutil
 import numpy as np
 import pandas as pd
 import torch
@@ -35,62 +34,43 @@ except ImportError:
     WANDB_AVAILABLE = False
 
 # ============================================================================
-# Setup Main Logger
+# Setup Simple Logger (ONE FILE ONLY)
 # ============================================================================
 
-def setup_main_logger(config: Config):
-    """Setup main logger for active learning loop."""
+def setup_simple_logger(config: Config):
+    """Setup single logger for entire active learning loop."""
     logger = logging.getLogger("active_learning")
-    logger.setLevel(getattr(logging, config.log_level.upper()))
-    logger.handlers = []  # Clear existing handlers
+    logger.setLevel(logging.INFO)
+    
+    # Close and remove ALL existing handlers
+    for handler in list(logger.handlers):
+        handler.close()
+        logger.removeHandler(handler)
+    logger.handlers = []
     
     # File handler
     log_file = Path(config.log_dir) / "active_learning.log"
     log_file.parent.mkdir(parents=True, exist_ok=True)
-    fh = logging.FileHandler(log_file)
-    fh.setLevel(getattr(logging, config.log_level.upper()))
+    fh = logging.FileHandler(log_file, mode='w')  # Overwrite each run
+    fh.setLevel(logging.INFO)
     
     # Console handler
-    if config.log_to_console:
-        ch = logging.StreamHandler()
-        ch.setLevel(getattr(logging, config.log_level.upper()))
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
     
-    # Formatter
-    formatter = logging.Formatter(
-        '%(asctime)s | %(levelname)-8s | %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
+    # Simple formatter
+    formatter = logging.Formatter('%(asctime)s | %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
     fh.setFormatter(formatter)
-    if config.log_to_console:
-        ch.setFormatter(formatter)
+    ch.setFormatter(formatter)
     
-    # Add handlers
     logger.addHandler(fh)
-    if config.log_to_console:
-        logger.addHandler(ch)
+    logger.addHandler(ch)
     
     return logger
 
 # ============================================================================
 # Helper functions
 # ============================================================================
-
-def is_csv_missing_or_empty(csv_path: str) -> bool:
-    """Check if the CSV file is missing or empty."""
-    p = Path(csv_path)
-    if not p.exists():
-        return True
-    try:
-        df = pd.read_csv(p)
-        return len(df) == 0
-    except Exception:
-        return True
-
-
-def sample_simplex_uniform(n: int, k: int) -> np.ndarray:
-    """Sample n points uniformly on a (k-1)-simplex using Dirichlet distribution."""
-    return np.random.dirichlet(alpha=np.ones(k), size=n)
-
 
 def get_database_stats(csv_path: str) -> dict:
     """Return summary statistics for the current database CSV."""
@@ -107,27 +87,20 @@ def get_database_stats(csv_path: str) -> dict:
     }
 
 
+def sample_simplex_uniform(n: int, k: int) -> np.ndarray:
+    """Sample n points uniformly on a (k-1)-simplex using Dirichlet distribution."""
+    return np.random.dirichlet(alpha=np.ones(k), size=n)
+
+
 def initial_data_creation_if_needed(config: Config, oracle: Oracle, logger: logging.Logger):
     """
     Create initial dataset with intelligent resume capability.
-    
-    Logic:
-    - If CSV doesn't exist: Create al_initial_samples samples
-    - If CSV exists but has fewer samples: Create remaining samples to reach al_initial_samples
-    - If CSV has enough samples: Skip data creation
-    
-    Args:
-        config: Config object
-        oracle: Oracle instance
-        logger: Logger instance
     """
     csv_path = config.csv_path
     target_samples = int(getattr(config, "al_initial_samples", 0) or 0)
     
     if target_samples <= 0:
-        raise RuntimeError(
-            "Initial data creation requires 'al_initial_samples' > 0 in config."
-        )
+        raise RuntimeError("Initial data creation requires 'al_initial_samples' > 0 in config.")
     
     # Check current database state
     db_stats = get_database_stats(csv_path)
@@ -135,34 +108,20 @@ def initial_data_creation_if_needed(config: Config, oracle: Oracle, logger: logg
     
     # Case 1: Enough data already exists
     if current_samples >= target_samples:
-        logger.info("="*70)
-        logger.info("INITIAL DATA CHECK")
-        logger.info("="*70)
-        logger.info(f"Target samples: {target_samples}")
-        logger.info(f"Current samples: {current_samples}")
-        logger.info("? Sufficient data available, skipping initial data creation")
-        logger.info("="*70)
+        logger.info(f"Initial data: {current_samples}/{target_samples} samples available - skipping")
         return
     
     # Case 2: Need to create (remaining) data
     remaining = target_samples - current_samples
     
     logger.info("="*70)
-    if current_samples == 0:
-        logger.info("INITIAL DATA CREATION (CSV empty or not found)")
-    else:
-        logger.info("RESUMING INITIAL DATA CREATION")
+    logger.info(f"INITIAL DATA GENERATION")
+    logger.info(f"Target: {target_samples} | Current: {current_samples} | To generate: {remaining}")
     logger.info("="*70)
-    logger.info(f"Target samples: {target_samples}")
-    logger.info(f"Current samples: {current_samples}")
-    logger.info(f"Samples to create: {remaining}")
-    logger.info(f"Target CSV: {csv_path}")
     
     elements = list(getattr(config, "elements", []))
     if not elements:
         raise RuntimeError("Initial data creation requires 'elements' in config.")
-    
-    logger.info(f"Elements: {elements}")
     
     # Generate compositions using Dirichlet sampling
     weights = sample_simplex_uniform(remaining, len(elements))
@@ -180,7 +139,8 @@ def initial_data_creation_if_needed(config: Config, oracle: Oracle, logger: logg
     successes = 0
     for i, comp in enumerate(compositions, 1):
         try:
-            logger.info(f"  [{current_samples + i}/{target_samples}] Calculating: {comp}")
+            comp_str = ", ".join([f"{k}:{v:.2f}" for k, v in comp.items()])
+            logger.info(f"  Generating [{current_samples + i}/{target_samples}]: {comp_str}")
             ok = oracle.calculate(comp)
             if ok is not False:
                 successes += 1
@@ -193,38 +153,16 @@ def initial_data_creation_if_needed(config: Config, oracle: Oracle, logger: logg
     # Final check
     final_stats = get_database_stats(csv_path)
     logger.info("="*70)
-    logger.info(f"Initial data creation completed:")
-    logger.info(f"  Added: {successes} samples")
-    logger.info(f"  Total in database: {final_stats['n_samples']} samples")
+    logger.info(f"Initial data complete: {final_stats['n_samples']} samples total")
     logger.info("="*70)
 
 
 def train_cycle_model(config: Config, cycle: int, logger: logging.Logger, is_final: bool = False) -> dict:
-    """
-    Train the model for the given active learning cycle.
+    """Train the model for the given active learning cycle (NO LOGGING)."""
     
-    Args:
-        config: Config object
-        cycle: Cycle number
-        logger: Logger instance
-        is_final: Whether this is final model training
-    
-    Returns:
-        dict: Training results with best metrics
-    """
-    logger.info("="*70)
-    if is_final:
-        logger.info("TRAINING FINAL MODEL")
-    else:
-        logger.info(f"TRAINING MODEL - CYCLE {cycle}")
-    logger.info("="*70)
-    
-    # ========== DETERMINISTIC INITIALIZATION ==========
     # Set seeds for reproducibility
-    seed = config.random_seed + cycle  # Different seed per cycle, but deterministic
-    logger.info(f"Setting random seed: {seed}")
+    seed = config.random_seed + cycle
     set_seed(seed)
-    # ==================================================
 
     outdir = Path(config.checkpoint_dir) / ("final_model" if is_final else f"cycle_{cycle}")
     outdir.mkdir(parents=True, exist_ok=True)
@@ -237,13 +175,12 @@ def train_cycle_model(config: Config, cycle: int, logger: logging.Logger, is_fin
         # Store dataset size in config for wandb naming
         config._current_dataset_size = n_samples
         
-        # Create dataloaders - handle return value properly
+        # Create dataloaders
         result = create_dataloaders(config)
         
         if result is None:
-            raise RuntimeError("create_dataloaders returned None - check your CSV path and data")
+            raise RuntimeError("create_dataloaders returned None")
         
-        # Handle both tuple and single return value
         if isinstance(result, tuple) and len(result) == 2:
             train_loader, val_loader = result
         else:
@@ -251,7 +188,7 @@ def train_cycle_model(config: Config, cycle: int, logger: logging.Logger, is_fin
             val_loader = None
         
         if train_loader is None:
-            raise RuntimeError("train_loader is None - no training data available")
+            raise RuntimeError("train_loader is None")
         
         builder = GraphBuilder(config)
         node_input_dim = get_node_input_dim(builder)
@@ -259,7 +196,6 @@ def train_cycle_model(config: Config, cycle: int, logger: logging.Logger, is_fin
         
         # Load best model from previous cycle if this is final training
         if is_final:
-            # Find the cycle with best validation MAE
             best_cycle = None
             best_val_mae = float('inf')
             
@@ -278,11 +214,13 @@ def train_cycle_model(config: Config, cycle: int, logger: logging.Logger, is_fin
                 checkpoint = torch.load(best_model_path, map_location='cpu')
                 model.load_state_dict(checkpoint['model_state_dict'])
         
-        # Create trainer
+        # Create trainer (with its own logger, but we ignore that)
         trainer = Trainer(model, config, save_dir=str(outdir), cycle=cycle, is_final_model=is_final)
-        trainer.train(train_loader, val_loader, verbose=True)
         
-        logger.info(f"Model training completed (Cycle {cycle})" if not is_final else "Final model training completed")
+        # Suppress trainer logging to console
+        trainer.logger.handlers = [h for h in trainer.logger.handlers if not isinstance(h, logging.StreamHandler)]
+        
+        trainer.train(train_loader, val_loader, verbose=False)  # verbose=False!
         
         return {
             'best_val_mae': trainer.best_val_mae,
@@ -295,76 +233,47 @@ def train_cycle_model(config: Config, cycle: int, logger: logging.Logger, is_fin
 
 
 def active_learning_loop(config: Config, logger: logging.Logger):
-    """
-    Main active learning loop with convergence checking and final model training.
+    """Main active learning loop - SIMPLIFIED VERSION."""
     
-    NEW: Supports train_only_mode to skip AL and only train final model.
-    
-    Workflow per cycle:
-    1. Train model (if not exists)
-    2. Run inference
-    3. Generate query data
-    4. Check convergence
-    
-    Args:
-        config: Config object
-        logger: Logger instance
-    """
     # ========== TRAIN-ONLY MODE ==========
     if config.train_only_mode:
         logger.info("="*70)
-        logger.info("TRAIN-ONLY MODE ENABLED")
-        logger.info("="*70)
-        logger.info("Skipping Active Learning loop")
-        logger.info("Training only final model on existing data")
+        logger.info("TRAIN-ONLY MODE")
         logger.info("="*70)
         
-        # Check if data exists
         db_stats = get_database_stats(config.csv_path)
         if db_stats['n_samples'] == 0:
             logger.error("ERROR: No data found in CSV!")
-            logger.error(f"CSV path: {config.csv_path}")
-            logger.error("Cannot train without data.")
-            logger.error("Set train_only_mode=False to generate data first.")
             return
         
-        logger.info(f"Dataset: {db_stats['n_samples']} samples, "
-                   f"{db_stats['n_compositions']} compositions")
+        logger.info(f"Dataset: {db_stats['n_samples']} samples")
+        logger.info("Training final model...")
         
-        # Train final model directly
-        logger.info("\nTraining final model...")
         final_results = train_cycle_model(config, cycle=0, logger=logger, is_final=True)
         
         if final_results:
-            logger.info("\n" + "="*70)
-            logger.info("FINAL MODEL RESULTS")
-            logger.info("="*70)
-            logger.info(f"  Best val MAE: {final_results['best_val_mae']:.4f} eV")
-            logger.info(f"  Best val Rel MAE: {final_results['best_val_rel_mae']:.4f}")
-            logger.info("="*70)
+            logger.info(f"Final model: val MAE = {final_results['best_val_mae']:.4f} eV")
         
-        logger.info("\n" + "="*70)
-        logger.info("✓ TRAIN-ONLY MODE COMPLETE")
+        logger.info("="*70)
+        logger.info("TRAIN-ONLY COMPLETE")
         logger.info("="*70)
         return
     
     # ========== NORMAL ACTIVE LEARNING MODE ==========
     logger.info("="*70)
-    logger.info("ACTIVE LEARNING LOOP STARTING")
+    logger.info("ACTIVE LEARNING START")
     logger.info("="*70)
     logger.info(f"Max cycles: {config.al_max_cycles}")
     logger.info(f"Test samples per cycle: {config.al_n_test}")
     logger.info(f"Query samples per cycle: {config.al_n_query}")
     logger.info(f"Elements: {config.elements}")
-    logger.info(f"Convergence check: {config.al_convergence_check}")
-    if config.al_convergence_check:
-        logger.info(f"  Metric: {config.al_convergence_metric}")
-        logger.info(f"  MAE threshold: {config.al_convergence_threshold_mae} eV")
-        logger.info(f"  Rel MAE threshold: {config.al_convergence_threshold_rel_mae}")
-        logger.info(f"  Patience: {config.al_convergence_patience} cycles")
     logger.info("="*70)
 
     oracle = Oracle(config)
+    
+    # Suppress oracle logging to console
+    oracle.logger.handlers = [h for h in oracle.logger.handlers if not isinstance(h, logging.StreamHandler)]
+    
     initial_data_creation_if_needed(config, oracle, logger)
     
     # Initialize convergence tracker
@@ -373,146 +282,183 @@ def active_learning_loop(config: Config, logger: logging.Logger):
     last_cycle = 0
 
     for cycle in range(config.al_max_cycles):
-        logger.info("\n" + "="*70)
-        logger.info(f"CYCLE {cycle}/{config.al_max_cycles - 1}")
+        logger.info("")
+        logger.info("="*70)
+        logger.info(f"CYCLE {cycle}")
         logger.info("="*70)
 
         db_stats = get_database_stats(config.csv_path)
-        logger.info(f"Current database: {db_stats['n_samples']} samples, "
-                   f"{db_stats['n_compositions']} unique compositions")
+        logger.info(f"Current database: {db_stats['n_samples']} samples")
 
         # ========== STEP 1: TRAIN MODEL ==========
-        # Skip cycle training if train_only_skip_cycles is True
         if config.train_only_skip_cycles:
-            logger.info(f"Skipping cycle {cycle} training (train_only_skip_cycles=True)")
-            logger.info("Will only train final model at the end")
+            logger.info("Skipping cycle training (train_only_skip_cycles=True)")
         else:
             current_model_path = Path(config.checkpoint_dir) / f"cycle_{cycle}" / "best_model.pt"
             
             if current_model_path.exists():
-                logger.info(f"✓ Model already exists for cycle {cycle}: {current_model_path}")
-                logger.info("  Skipping training, proceeding to inference")
+                logger.info(f"Model exists for cycle {cycle} - skipping training")
             else:
-                logger.info(f"Training model for cycle {cycle} with current data ...")
+                logger.info(f"Training model for cycle {cycle}...")
                 train_result = train_cycle_model(config, cycle, logger)
                 if train_result is None:
-                    logger.error(f"✗ Training failed for cycle {cycle}, aborting AL loop")
+                    logger.error(f"Training failed for cycle {cycle}")
                     break
-                logger.info(f"✓ Training completed: val MAE = {train_result['best_val_mae']:.4f} eV")
+                logger.info(f"Training complete: val MAE = {train_result['best_val_mae']:.4f} eV")
         
         # ========== STEP 2: INFERENCE ==========
-        # Skip if train_only_skip_cycles
         if config.train_only_skip_cycles:
-            logger.info(f"Skipping inference for cycle {cycle}")
+            logger.info("Skipping inference")
         else:
-            logger.info(f"\nStarting inference for cycle {cycle} ...")
+            logger.info(f"Running inference for cycle {cycle}...")
             try:
                 current_model_path = Path(config.checkpoint_dir) / f"cycle_{cycle}" / "best_model.pt"
-                selected, predictions = run_inference_cycle(
-                    cycle,
-                    str(current_model_path),
-                    oracle,
-                    config,
-                    convergence_tracker=convergence_tracker,
-                    verbose=True
+                
+                # Suppress inference logging (create temporary logger)
+                inference_logger = logging.getLogger(f"inference_cycle_{cycle}")
+                inference_logger.handlers = []  # No handlers = no output
+                inference_logger.setLevel(logging.CRITICAL)  # Ignore everything
+                
+                # Run inference with suppressed logging
+                from inference import (
+                    generate_test_compositions,
+                    generate_test_data_with_oracle,
+                    predict_barriers_for_test_set,
+                    select_samples_by_error
                 )
-                logger.info(f"✓ Inference completed: {len(selected)} high-error samples selected")
+                
+                # Generate test compositions
+                test_compositions = generate_test_compositions(
+                    elements=list(config.elements),
+                    n_test=config.al_n_test,
+                    strategy=config.al_test_strategy,
+                    seed=config.al_seed + cycle
+                )
+                
+                logger.info(f"  Generating {len(test_compositions)} test samples...")
+                
+                # Generate test data with Oracle (with progress in main log)
+                test_results = []
+                for i, comp in enumerate(test_compositions, 1):
+                    if i % 100 == 0:  # Log every 100 samples
+                        logger.info(f"    Progress: {i}/{len(test_compositions)} test samples")
+                    
+                    success = oracle.calculate(comp)
+                    if success:
+                        # Read last entry from CSV
+                        df = pd.read_csv(config.csv_path)
+                        last_entry = df.iloc[-1]
+                        test_results.append({
+                            'composition_string': last_entry['composition_string'],
+                            'structure_folder': last_entry['structure_folder'],
+                            'oracle_barrier': last_entry['backward_barrier_eV']
+                        })
+                
+                test_data = pd.DataFrame(test_results)
+                logger.info(f"  Generated {len(test_data)} test samples")
+                
+                # Predict with model
+                logger.info(f"  Making predictions...")
+                predictions = predict_barriers_for_test_set(
+                    str(current_model_path),
+                    test_data,
+                    config,
+                    verbose=False
+                )
+                
+                # Calculate statistics
+                mae = predictions['absolute_error'].mean()
+                
+                logger.info(f"  Prediction MAE: {mae:.4f} eV")
+                
+                # Update convergence tracker
+                if convergence_tracker is not None:
+                    rel_mae = predictions['relative_error'].mean()
+                    converged = convergence_tracker.update(cycle, mae, rel_mae)
+                    if converged:
+                        logger.info(f"  CONVERGED! (no improvement for {config.al_convergence_patience} cycles)")
+                
+                # Select samples for training
+                selected = select_samples_by_error(
+                    predictions=predictions,
+                    n_query=config.al_n_query,
+                    strategy=config.al_query_strategy,
+                    seed=config.al_seed + cycle
+                )
+                
+                logger.info(f"  Selected {len(selected)} high-error samples")
 
             except Exception as e:
-                logger.error(f"✗ Inference failed for cycle {cycle}: {e}")
+                logger.error(f"Inference failed for cycle {cycle}: {e}")
                 traceback.print_exc()
-                logger.warning("  Skipping to next cycle")
                 last_cycle = cycle
                 continue
 
         # ========== STEP 3: GENERATE QUERY DATA ==========
-        # Skip if train_only_skip_cycles
         if config.train_only_skip_cycles:
-            logger.info(f"Skipping query generation for cycle {cycle}")
-            logger.info("Using existing data only")
+            logger.info("Skipping query generation")
         else:
-            logger.info(f"\nGenerating {config.al_n_query} query samples in high-error regions ...")
+            logger.info(f"Generating {config.al_n_query} query samples...")
             db_stats_before = get_database_stats(config.csv_path)
             
             try:
-                n_query_added = generate_and_calculate_query_data(
+                # Generate query compositions near high-error samples
+                from inference import generate_query_compositions_from_selected
+                
+                query_compositions = generate_query_compositions_from_selected(
                     selected_samples=selected,
-                    oracle=oracle,
-                    config=config,
-                    verbose=True
+                    n_query=config.al_n_query,
+                    elements=list(config.elements),
+                    strategy='nearby',
+                    noise_level=0.1,
+                    seed=config.al_seed + cycle
                 )
+                
+                # Calculate with Oracle (with progress)
+                n_successful = 0
+                for i, comp in enumerate(query_compositions, 1):
+                    if i % 100 == 0:
+                        logger.info(f"    Progress: {i}/{len(query_compositions)} query samples")
+                    
+                    success = oracle.calculate(comp)
+                    if success:
+                        n_successful += 1
+                
                 db_stats_after = get_database_stats(config.csv_path)
-                logger.info(f"✓ Query generation completed: {n_query_added} samples added")
-                logger.info(f"  Database: {db_stats_before['n_samples']} → {db_stats_after['n_samples']} samples")
+                logger.info(f"  Added {n_successful} query samples")
+                logger.info(f"  Database: {db_stats_before['n_samples']} ? {db_stats_after['n_samples']} samples")
                 
             except Exception as e:
-                logger.error(f"✗ Query generation failed for cycle {cycle}: {e}")
+                logger.error(f"Query generation failed: {e}")
                 traceback.print_exc()
-                logger.warning("  Skipping to next cycle")
                 last_cycle = cycle
                 continue
 
         # ========== STEP 4: CHECK CONVERGENCE ==========
-        if convergence_tracker is not None and not config.train_only_skip_cycles:
-            summary = convergence_tracker.get_summary()
-            logger.info(f"\nConvergence status:")
-            logger.info(f"  Best MAE: {summary['best_mae']:.4f} eV")
-            logger.info(f"  Cycles without improvement: {summary['cycles_without_improvement']}/{config.al_convergence_patience}")
-            
-            if summary['converged']:
-                logger.info("\n" + "="*70)
-                logger.info("✓✓✓ CONVERGENCE ACHIEVED! ✓✓✓")
-                logger.info("="*70)
-                logger.info(f"  Metric: {config.al_convergence_metric.upper()}")
-                logger.info(f"  Best value: {summary['best_mae'] if config.al_convergence_metric == 'mae' else summary['best_rel_mae']:.4f}")
-                logger.info(f"  Stopped at cycle: {cycle}")
-                converged = True
-                last_cycle = cycle
-                
-                # Save convergence history
-                save_convergence_history(
-                    convergence_tracker,
-                    Path(config.al_results_dir) / "convergence_history.json"
-                )
-                logger.info(f"  Convergence history saved")
-                logger.info("="*70)
-                break
+        if converged:
+            logger.info("="*70)
+            logger.info(f"CONVERGED AT CYCLE {cycle}")
+            logger.info("="*70)
+            last_cycle = cycle
+            break
 
-        logger.info(f"\n✓ Cycle {cycle} completed successfully")
-        logger.info("="*70)
         last_cycle = cycle
     
     # ========== FINAL MODEL TRAINING ==========
-    logger.info("\n" + "="*70)
-    if converged:
-        logger.info("TRAINING FINAL MODEL (after convergence)")
-        logger.info(f"  Converged at cycle {last_cycle}")
-    elif config.train_only_skip_cycles:
-        logger.info("TRAINING FINAL MODEL (train_only_skip_cycles mode)")
-        logger.info(f"  Skipped all cycle training")
-    else:
-        logger.info("TRAINING FINAL MODEL (max cycles reached)")
-        logger.info(f"  Completed {last_cycle + 1} cycles")
+    logger.info("")
     logger.info("="*70)
-    logger.info(f"Using higher patience: {config.final_model_patience} epochs")
-    logger.info(f"Training on full dataset: {get_database_stats(config.csv_path)['n_samples']} samples")
+    logger.info("TRAINING FINAL MODEL")
+    logger.info("="*70)
     
     final_results = train_cycle_model(config, last_cycle, logger, is_final=True)
     
     if final_results:
-        logger.info("\n" + "="*70)
-        logger.info("FINAL MODEL RESULTS")
-        logger.info("="*70)
-        logger.info(f"  Best val MAE: {final_results['best_val_mae']:.4f} eV")
-        logger.info(f"  Best val Rel MAE: {final_results['best_val_rel_mae']:.4f}")
-        logger.info("="*70)
+        logger.info(f"Final model: val MAE = {final_results['best_val_mae']:.4f} eV")
     
-    logger.info("\n" + "="*70)
-    logger.info("✓✓✓ ACTIVE LEARNING COMPLETE ✓✓✓")
     logger.info("="*70)
-    logger.info(f"  Total cycles: {last_cycle + 1}")
-    logger.info(f"  Final dataset size: {get_database_stats(config.csv_path)['n_samples']} samples")
-    logger.info(f"  Converged: {'Yes' if converged else 'No'}")
+    logger.info("ACTIVE LEARNING COMPLETE")
+    logger.info(f"Total cycles: {last_cycle + 1}")
+    logger.info(f"Final dataset: {get_database_stats(config.csv_path)['n_samples']} samples")
     logger.info("="*70)
 
 
@@ -522,10 +468,11 @@ def active_learning_loop(config: Config, logger: logging.Logger):
 
 if __name__ == "__main__":
     config = Config()
-    logger = setup_main_logger(config)
+    logger = setup_simple_logger(config)
     
+    # Log config
     logger.info("="*70)
-    logger.info("CURRENT CONFIG")
+    logger.info("CONFIG")
     logger.info("="*70)
     for key, val in config.__dict__.items():
         if not key.startswith('_'):
@@ -535,6 +482,6 @@ if __name__ == "__main__":
     try:
         active_learning_loop(config, logger)
     except Exception as e:
-        logger.error(f"Run aborted: {e}")
+        logger.error(f"FATAL ERROR: {e}")
         traceback.print_exc()
         sys.exit(1)

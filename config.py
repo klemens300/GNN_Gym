@@ -69,18 +69,18 @@ class Config:
     # ============================================================
     
     # Atom Graph (GNN Encoder)
-    gnn_hidden_dim: int = 64
-    gnn_num_layers: int = 5
-    gnn_embedding_dim: int = 64
+    gnn_hidden_dim: int = 128
+    gnn_num_layers: int = 3
+    gnn_embedding_dim: int = 128
 
     # Line Graph (for bond angles)
     use_line_graph: bool = True
-    line_graph_hidden_dim: int = 64
+    line_graph_hidden_dim: int = 128
     line_graph_num_layers: int = 3
-    line_graph_embedding_dim: int = 64
+    line_graph_embedding_dim: int = 128
 
     # MLP Predictor
-    mlp_hidden_dims: List[int] = field(default_factory=lambda: [512, 256, 128])
+    mlp_hidden_dims: List[int] = field(default_factory=lambda: [1024, 512, 256])
     dropout: float = 0.1
     
     # ============================================================
@@ -217,7 +217,8 @@ class Config:
         # Element string for identification
         elements_str = "".join(sorted(self.elements))
         
-        parts = [timestamp, elements_str]
+        # Start with timestamp, elements, and "barrier"
+        parts = [timestamp, elements_str, "barrier"]
         
         if n_samples is not None:
             parts.append(f"N{n_samples}")
@@ -240,7 +241,11 @@ class Config:
     def get_experiment_name(self, n_samples: int = None, cycle: int = None) -> str:
         """Generate experiment name for wandb."""
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        parts = [timestamp]
+        
+        # Element string
+        elements_str = "".join(sorted(self.elements))
+        
+        parts = [timestamp, elements_str, "barrier"]
         
         if n_samples is not None:
             parts.append(f"samples{n_samples}")
@@ -254,48 +259,14 @@ class Config:
 # Display config
 if __name__ == "__main__":
     print("="*70)
-    print("RTX 5090 OPTIMIZED CONFIGURATION + REAL GEOMETRY")
+    print("CONFIG")
     print("="*70)
     
     config = Config()
     
-    print("\n🔥 KEY FIXES:")
-    print("  ✅ Input features: 12 (4 one-hot + 8 properties)")
-    print("  ✅ Real geometry from CIF files")
-    
-    print("\n🚀 RTX 5090 OPTIMIZATIONS:")
-    print(f"  ✅ Batch size: 256 → {config.batch_size} (1.5x)")
-    print(f"  ✅ Val batch: 64 → {config.batch_size_val} (8x!)")
-    print(f"  ✅ Learning rate: 4e-3 → {config.learning_rate} (1.5x)")
-    print(f"  ✅ num_workers: 12 → {config.num_workers}")
-    print(f"  ✅ Mixed Precision (AMP): {config.use_amp}")
-    print(f"  ✅ Model Compilation: {config.compile_model}")
-    print(f"  ✅ Fused Optimizer: {config.use_fused_optimizer}")
-    print(f"  ✅ cuDNN Benchmark: {config.cudnn_benchmark}")
-    print(f"  ✅ Prefetch Factor: {config.prefetch_factor}")
-    
-    print("\n📊 EXPECTED PERFORMANCE:")
-    print("  • Training speed: ~2-2.5x faster than before")
-    print("  • GPU utilization: 95-100%")
-    print("  • VRAM usage: ~20-24 GB (plenty of headroom!)")
-    print("  • Time per epoch: ~25-35s (was ~60s+)")
-    
-    print("\n💾 FEATURE DIMENSIONS:")
-    print("  • Node features: 12")
-    print("    - One-hot encoding: 4 (Mo, Nb, Ta, W)")
-    print("    - Atomic properties: 8")
-    print("      1. atomic_number")
-    print("      2. atomic_mass")
-    print("      3. atomic_radius")
-    print("      4. electronegativity")
-    print("      5. first_ionization")
-    print("      6. electron_affinity")
-    print("      7. melting_point")
-    print("      8. density")
-    
-    print("\nHARDWARE:")
-    print("  GPU: RTX 5090 (32 GB)")
-    print("  CPU: Ryzen 7 9800X3D (8C/16T)")
-    print("  RAM: 32 GB")
+    print("\nExample model names:")
+    print(f"  Cycle 0: {config.get_model_name(n_samples=5000, cycle=0)}")
+    print(f"  Cycle 5: {config.get_model_name(n_samples=10000, cycle=5)}")
+    print(f"  Final:   {config.get_model_name(n_samples=25000)}")
     
     print("\n" + "="*70)
