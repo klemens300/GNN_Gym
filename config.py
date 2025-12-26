@@ -167,12 +167,19 @@ class Config:
     relax_max_steps: int = 500
     
     # ============================================================
-    # ACTIVE LEARNING
+    # ACTIVE LEARNING - FIXED TEST SET
     # ============================================================
-    al_initial_samples: int = 5000
-    al_n_test: int = 1000
-    al_test_strategy: str = 'uniform'
-    al_n_query: int = 1000
+    # Test set (FIXED for all cycles, separate CSV)
+    al_test_set_size: int = 1000
+    al_test_set_strategy: str = "uniform"  # "uniform", "sobol", or "grid"
+    al_test_set_csv: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN/databases/MoNbCrV_test.csv"
+    al_test_set_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN/databases/MoNbCrV_test"
+    
+    # Training set (grows with each cycle, MAIN CSV)
+    al_initial_training_samples: int = 1000
+    al_n_query: int = 250  # Added to TRAINING set each cycle
+    
+    # Active Learning Loop
     al_query_strategy: str = 'error_weighted'
     al_max_cycles: int = 20
     al_seed: int = 42
