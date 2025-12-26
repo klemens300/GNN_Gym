@@ -1,19 +1,18 @@
 """
-ALIGNN-Style GNN for Diffusion Barrier Prediction
+ALIGNN-Style GNN for Diffusion Barrier Prediction with Atom Embeddings
 
 Architecture:
-1. Atom Graph Encoder (GNN)
-2. Line Graph Encoder (for bond angles)
-3. Graph-to-Graph Message Passing
-4. Barrier Predictor (MLP)
+1. Atom Embeddings (learned per element type)
+2. Atom Graph Encoder (GNN)
+3. Line Graph Encoder (for bond angles)
+4. Graph-to-Graph Message Passing
+5. Barrier Predictor (MLP)
 
-Key: Both atom and line graph use message passing, with information
-     exchange between the two graphs.
-
-FIXED:
-- Added residual connections to prevent gradient vanishing
-- Fixed line graph batching using batch mapping
-- Added normalization to bond-to-atom aggregation
+Key features:
+- Learned embeddings instead of one-hot encoding
+- Optional atomic property concatenation
+- Residual connections for gradient flow
+- Normalized bond-to-atom aggregation
 """
 
 import torch
@@ -23,14 +22,16 @@ from torch_geometric.nn import MessagePassing, global_mean_pool
 
 class GraphConvLayer(MessagePassing):
     """
-    Message passing for atom graph with residual connection.
+    Message passing layer for atom graph with residual connections.
     
-    FIXED: Added residual connection for better gradient flow.
+    Aggregates information from neighboring atoms via edge features.
+    Includes residual connection to prevent vanishing gradients.
     """
     
     def __init__(self, node_dim: int, edge_dim: int, hidden_dim: int):
         super().__init__(aggr='mean')
         
+        # Message network: combines source node, target node, and edge features
         self.message_net = nn.Sequential(
             nn.Linear(2 * node_dim + edge_dim, hidden_dim),
             nn.BatchNorm1d(hidden_dim),
@@ -38,44 +39,51 @@ class GraphConvLayer(MessagePassing):
             nn.Linear(hidden_dim, hidden_dim)
         )
         
+        # Update network: combines node with aggregated messages
         self.update_net = nn.Sequential(
             nn.Linear(node_dim + hidden_dim, hidden_dim),
             nn.BatchNorm1d(hidden_dim),
             nn.SiLU()
         )
         
-        # ✅ FIX: Projection for residual if dimensions don't match
+        # Projection for residual connection if dimensions don't match
         self.residual_projection = None
         if node_dim != hidden_dim:
             self.residual_projection = nn.Linear(node_dim, hidden_dim)
     
     def forward(self, x, edge_index, edge_attr):
-        # Store input for residual
+        # Store input for residual connection
         residual = x
         
-        # Message passing
+        # Message passing: aggregate neighbor information
         out = self.propagate(edge_index, x=x, edge_attr=edge_attr)
+        
+        # Update: combine node with aggregated messages
         out = self.update_net(torch.cat([x, out], dim=1))
         
-        # ✅ FIX: Residual connection
+        # Apply residual connection
         if self.residual_projection is not None:
             residual = self.residual_projection(residual)
         
         return out + residual
     
     def message(self, x_i, x_j, edge_attr):
+        """
+        Construct messages from source node (j) to target node (i).
+        Combines source features, target features, and edge features.
+        """
         msg_input = torch.cat([x_i, x_j, edge_attr], dim=1)
         return self.message_net(msg_input)
 
 
 class LineGraphConvLayer(MessagePassing):
     """
-    Message passing for line graph with residual connection.
+    Message passing layer for line graph with residual connections.
     
-    Line graph nodes = atom graph edges (bonds)
-    Line graph edges = angles between bonds
+    Line graph: nodes = bonds (edges of atom graph)
+                edges = angles between bonds
     
-    FIXED: Added residual connection for better gradient flow.
+    This allows the model to learn angular information between bonds.
     """
     
     def __init__(self, node_dim: int, edge_dim: int, hidden_dim: int):
@@ -96,7 +104,7 @@ class LineGraphConvLayer(MessagePassing):
             nn.SiLU()
         )
         
-        # ✅ FIX: Projection for residual if dimensions don't match
+        # Projection for residual if dimensions don't match
         self.residual_projection = None
         if node_dim != hidden_dim:
             self.residual_projection = nn.Linear(node_dim, hidden_dim)
@@ -109,7 +117,7 @@ class LineGraphConvLayer(MessagePassing):
         out = self.propagate(edge_index, x=x, edge_attr=edge_attr)
         out = self.update_net(torch.cat([x, out], dim=1))
         
-        # ✅ FIX: Residual connection
+        # Residual connection
         if self.residual_projection is not None:
             residual = self.residual_projection(residual)
         
@@ -122,25 +130,22 @@ class LineGraphConvLayer(MessagePassing):
 
 class ALIGNNEncoder(nn.Module):
     """
-    ALIGNN-style encoder with atom graph + line graph.
+    ALIGNN-style encoder with atom embeddings and line graph.
     
-    Architecture:
-    1. Encode atom nodes and bond nodes separately
-    2. Alternate message passing between:
+    Process:
+    1. Embed element types as learned vectors
+    2. Optionally concatenate atomic properties
+    3. Alternate message passing:
        - Atom graph (atoms communicate)
-       - Line graph (bonds communicate)
-       - Graph-to-graph (bonds update atoms)
-    3. Pool to graph-level embedding
-    
-    FIXED:
-    - Correct line graph batching using batch mapping
-    - Normalized bond-to-atom aggregation
-    - Residual connections in conv layers
+       - Line graph (bonds communicate)  
+       - Bond-to-atom updates (bonds update atoms)
+    4. Pool to graph-level representation
     """
     
     def __init__(
         self,
-        atom_node_dim: int,
+        num_elements: int,
+        atom_embedding_dim: int = 32,
         atom_edge_dim: int = 1,
         line_node_dim: int = 4,
         line_edge_dim: int = 1,
@@ -149,31 +154,51 @@ class ALIGNNEncoder(nn.Module):
         atom_num_layers: int = 5,
         line_num_layers: int = 3,
         embedding_dim: int = 64,
-        use_line_graph: bool = True
+        use_line_graph: bool = True,
+        use_atomic_properties: bool = True
     ):
         super().__init__()
         
         self.use_line_graph = use_line_graph
+        self.use_atomic_properties = use_atomic_properties
         self.atom_num_layers = atom_num_layers
         self.line_num_layers = line_num_layers
         
-        # Atom graph layers
-        self.atom_node_embedding = nn.Linear(atom_node_dim, atom_hidden_dim)
+        # Learned atom embeddings (one per element type)
+        self.atom_embedding = nn.Embedding(
+            num_embeddings=num_elements,
+            embedding_dim=atom_embedding_dim
+        )
+        
+        # Determine input dimension for atom encoder
+        # Embedding + optional atomic properties (8 features)
+        if use_atomic_properties:
+            atom_input_dim = atom_embedding_dim + 8
+        else:
+            atom_input_dim = atom_embedding_dim
+        
+        # Project combined features to hidden dimension
+        self.atom_node_embedding = nn.Linear(atom_input_dim, atom_hidden_dim)
+        
+        # Atom graph message passing layers
         self.atom_conv_layers = nn.ModuleList([
             GraphConvLayer(atom_hidden_dim, atom_edge_dim, atom_hidden_dim)
             for _ in range(atom_num_layers)
         ])
         
-        # Line graph layers (if enabled)
+        # Line graph components (if enabled)
         if use_line_graph:
+            # Line graph node embedding
             self.line_node_embedding = nn.Linear(line_node_dim, line_hidden_dim)
+            
+            # Line graph message passing layers
             self.line_conv_layers = nn.ModuleList([
                 LineGraphConvLayer(line_hidden_dim, line_edge_dim, line_hidden_dim)
                 for _ in range(line_num_layers)
             ])
             
-            # Graph-to-graph: Update atom features from line graph
-            # Each bond (line node) contributes to its source and target atoms
+            # Bond-to-atom update layers
+            # Each bond contributes information to its source atom
             self.bond_to_atom_update = nn.ModuleList([
                 nn.Sequential(
                     nn.Linear(atom_hidden_dim + line_hidden_dim, atom_hidden_dim),
@@ -183,7 +208,7 @@ class ALIGNNEncoder(nn.Module):
                 for _ in range(min(atom_num_layers, line_num_layers))
             ])
         
-        # Output projection
+        # Output projection to final embedding dimension
         final_dim = atom_hidden_dim
         if use_line_graph:
             final_dim += line_hidden_dim
@@ -195,57 +220,60 @@ class ALIGNNEncoder(nn.Module):
     
     def forward(self, data):
         """
-        Forward pass through ALIGNN encoder.
+        Forward pass through encoder.
         
         Args:
-            data: PyG Data with:
-                - x, edge_index, edge_attr (atom graph)
-                - line_graph_x, line_graph_edge_index, line_graph_edge_attr (line graph)
-                - line_graph_batch_mapping (CRITICAL for batching)
-                - batch (for batching)
+            data: PyG Data object with:
+                - x_element: Element indices [n_atoms] (LongTensor)
+                - x_props: Atomic properties [n_atoms, 8] (FloatTensor, optional)
+                - edge_index: Atom graph edges [2, n_edges]
+                - edge_attr: Bond distances [n_edges, 1]
+                - line_graph_* : Line graph data (if enabled)
+                - batch: Batch assignment [n_atoms]
         
         Returns:
             Graph embedding [batch_size, embedding_dim]
         """
-        # Atom graph data
-        x = data.x
+        # Get atom graph data
         edge_index = data.edge_index
         edge_attr = data.edge_attr
         batch = data.batch if hasattr(data, 'batch') else \
-                torch.zeros(x.size(0), dtype=torch.long, device=x.device)
+                torch.zeros(data.x_element.size(0), dtype=torch.long, device=data.x_element.device)
         
-        # Embed atom nodes
+        # Get learned embeddings for each element
+        x = self.atom_embedding(data.x_element)  # [n_atoms, embedding_dim]
+        
+        # Optionally concatenate atomic properties
+        if self.use_atomic_properties and hasattr(data, 'x_props'):
+            x = torch.cat([x, data.x_props], dim=1)  # [n_atoms, embedding_dim + 8]
+        
+        # Project to hidden dimension
         x = self.atom_node_embedding(x)
         
         if self.use_line_graph:
-            # Line graph data
+            # Get line graph data
             line_x = data.line_graph_x
             line_edge_index = data.line_graph_edge_index
             line_edge_attr = data.line_graph_edge_attr
-            
-            # ✅ FIX: Get batch mapping for line graph
-            # This maps each bond (line node) to its source atom
             line_graph_batch_mapping = data.line_graph_batch_mapping
             
-            # Embed line nodes (bonds)
+            # Embed line graph nodes (bonds)
             line_x = self.line_node_embedding(line_x)
             
-            # Interleaved message passing
+            # Interleaved message passing between atom and line graphs
             num_joint_layers = min(self.atom_num_layers, self.line_num_layers)
             
             for i in range(num_joint_layers):
-                # Update atoms
+                # Update atoms via atom graph
                 x = self.atom_conv_layers[i](x, edge_index, edge_attr)
                 
-                # Update bonds
+                # Update bonds via line graph
                 line_x = self.line_conv_layers[i](line_x, line_edge_index, line_edge_attr)
                 
-                # ✅ FIX: Bond → Atom with normalized aggregation
-                # Each bond (edge in atom graph) updates its source atom
-                
+                # Bond-to-atom update with normalized aggregation
                 bond_messages = line_x  # [num_bonds, line_hidden_dim]
                 
-                # ✅ FIX: Count bonds per atom for normalization
+                # Count bonds per atom for normalization
                 bond_count = torch.zeros(x.size(0), device=x.device, dtype=x.dtype)
                 bond_count.index_add_(
                     0, 
@@ -254,195 +282,35 @@ class ALIGNNEncoder(nn.Module):
                 )
                 bond_count = bond_count.clamp(min=1)  # Avoid division by zero
                 
-                # Aggregate bond messages to atoms (sum)
+                # Aggregate bond messages to atoms
                 atom_bond_features = torch.zeros(
                     x.size(0), line_x.size(1), 
                     device=x.device, dtype=x.dtype
                 )
                 atom_bond_features.index_add_(0, edge_index[0], bond_messages)
                 
-                # ✅ FIX: Normalize by bond count (mean instead of sum)
+                # Normalize by bond count (mean instead of sum)
                 atom_bond_features = atom_bond_features / bond_count.unsqueeze(1)
                 
-                # Update atoms with normalized bond information
+                # Update atoms with bond information
                 x = self.bond_to_atom_update[i](torch.cat([x, atom_bond_features], dim=1))
             
-            # Remaining atom layers (if any)
+            # Process remaining layers
             for i in range(num_joint_layers, self.atom_num_layers):
                 x = self.atom_conv_layers[i](x, edge_index, edge_attr)
             
-            # Remaining line layers (if any)
             for i in range(num_joint_layers, self.line_num_layers):
                 line_x = self.line_conv_layers[i](line_x, line_edge_index, line_edge_attr)
             
-            # Pool both graphs
+            # Pool both graphs to get graph-level embeddings
             atom_embedding = global_mean_pool(x, batch)
             
-            # ✅ FIX: Create batch assignment for line graph using mapping
-            # line_graph_batch_mapping[i] = atom index that bond i belongs to
-            # batch[line_graph_batch_mapping[i]] = graph ID for that atom
+            # Create batch assignment for line graph
+            # Each bond belongs to the same graph as its source atom
             line_batch = batch[line_graph_batch_mapping]
             line_embedding = global_mean_pool(line_x, line_batch)
             
-            # Concatenate embeddings
-            graph_embedding = torch.cat([atom_embedding, line_embedding], dim=1)
-        
-        else:
-            # No line graph: standard GNN
-            for conv in self.atom_conv_layers:
-                x = conv(x, edge_index, edge_attr)
-            
-            graph_embedding = global_mean_pool(x, batch)
-        
-        # Final projection
-        graph_embedding = self.output_projection(graph_embedding)
-        
-        return graph_embedding
-
-
-class DualALIGNNEncoder(nn.Module):
-    """
-    Dual ALIGNN encoder for initial and final structures.
-    
-    This is used in the model to encode both structures separately
-    before combining them for barrier prediction.
-    
-    FIXED: Same fixes as ALIGNNEncoder
-    """
-    
-    def __init__(
-        self,
-        atom_node_dim: int,
-        atom_edge_dim: int = 1,
-        line_node_dim: int = 4,
-        line_edge_dim: int = 1,
-        atom_hidden_dim: int = 64,
-        line_hidden_dim: int = 64,
-        atom_num_layers: int = 5,
-        line_num_layers: int = 4,
-        embedding_dim: int = 64,
-        use_line_graph: bool = True
-    ):
-        super().__init__()
-        
-        self.use_line_graph = use_line_graph
-        self.atom_num_layers = atom_num_layers
-        self.line_num_layers = line_num_layers
-        
-        # Atom graph layers
-        self.atom_node_embedding = nn.Linear(atom_node_dim, atom_hidden_dim)
-        self.atom_conv_layers = nn.ModuleList([
-            GraphConvLayer(atom_hidden_dim, atom_edge_dim, atom_hidden_dim)
-            for _ in range(atom_num_layers)
-        ])
-        
-        # Line graph layers (if enabled)
-        if use_line_graph:
-            self.line_node_embedding = nn.Linear(line_node_dim, line_hidden_dim)
-            self.line_conv_layers = nn.ModuleList([
-                LineGraphConvLayer(line_hidden_dim, line_edge_dim, line_hidden_dim)
-                for _ in range(line_num_layers)
-            ])
-            
-            # Graph-to-graph: Update atom features from line graph
-            self.bond_to_atom_update = nn.ModuleList([
-                nn.Sequential(
-                    nn.Linear(atom_hidden_dim + line_hidden_dim, atom_hidden_dim),
-                    nn.BatchNorm1d(atom_hidden_dim),
-                    nn.SiLU()
-                )
-                for _ in range(min(atom_num_layers, line_num_layers))
-            ])
-        
-        # Output projection
-        final_dim = atom_hidden_dim
-        if use_line_graph:
-            final_dim += line_hidden_dim
-        
-        self.output_projection = nn.Sequential(
-            nn.Linear(final_dim, embedding_dim),
-            nn.SiLU()
-        )
-    
-    def forward(self, data):
-        """
-        Forward pass through ALIGNN encoder.
-        
-        FIXED: Correct line graph batching and normalized aggregation.
-        """
-        # Atom graph data
-        x = data.x
-        edge_index = data.edge_index
-        edge_attr = data.edge_attr
-        batch = data.batch if hasattr(data, 'batch') else \
-                torch.zeros(x.size(0), dtype=torch.long, device=x.device)
-        
-        # Embed atom nodes
-        x = self.atom_node_embedding(x)
-        
-        if self.use_line_graph:
-            # Line graph data
-            line_x = data.line_graph_x
-            line_edge_index = data.line_graph_edge_index
-            line_edge_attr = data.line_graph_edge_attr
-            
-            # ✅ FIX: Get batch mapping for line graph
-            line_graph_batch_mapping = data.line_graph_batch_mapping
-            
-            # Embed line nodes (bonds)
-            line_x = self.line_node_embedding(line_x)
-            
-            # Interleaved message passing
-            num_joint_layers = min(self.atom_num_layers, self.line_num_layers)
-            
-            for i in range(num_joint_layers):
-                # Update atoms
-                x = self.atom_conv_layers[i](x, edge_index, edge_attr)
-                
-                # Update bonds
-                line_x = self.line_conv_layers[i](line_x, line_edge_index, line_edge_attr)
-                
-                # ✅ FIX: Bond → Atom with normalized aggregation
-                bond_messages = line_x  # [num_bonds, line_hidden_dim]
-                
-                # ✅ FIX: Count bonds per atom for normalization
-                bond_count = torch.zeros(x.size(0), device=x.device, dtype=x.dtype)
-                bond_count.index_add_(
-                    0, 
-                    edge_index[0], 
-                    torch.ones(edge_index.size(1), device=x.device, dtype=x.dtype)
-                )
-                bond_count = bond_count.clamp(min=1)  # Avoid division by zero
-                
-                # Aggregate bond messages to atoms (sum)
-                atom_bond_features = torch.zeros(
-                    x.size(0), line_x.size(1), 
-                    device=x.device, dtype=x.dtype
-                )
-                atom_bond_features.index_add_(0, edge_index[0], bond_messages)
-                
-                # ✅ FIX: Normalize by bond count (mean instead of sum)
-                atom_bond_features = atom_bond_features / bond_count.unsqueeze(1)
-                
-                # Update atoms with normalized bond information
-                x = self.bond_to_atom_update[i](torch.cat([x, atom_bond_features], dim=1))
-            
-            # Remaining atom layers (if any)
-            for i in range(num_joint_layers, self.atom_num_layers):
-                x = self.atom_conv_layers[i](x, edge_index, edge_attr)
-            
-            # Remaining line layers (if any)
-            for i in range(num_joint_layers, self.line_num_layers):
-                line_x = self.line_conv_layers[i](line_x, line_edge_index, line_edge_attr)
-            
-            # Pool both graphs
-            atom_embedding = global_mean_pool(x, batch)
-            
-            # ✅ FIX: Create batch assignment for line graph using mapping
-            line_batch = batch[line_graph_batch_mapping]
-            line_embedding = global_mean_pool(line_x, line_batch)
-            
-            # Concatenate embeddings
+            # Concatenate atom and bond embeddings
             graph_embedding = torch.cat([atom_embedding, line_embedding], dim=1)
         
         else:
@@ -459,7 +327,17 @@ class DualALIGNNEncoder(nn.Module):
 
 
 class BarrierPredictor(nn.Module):
-    """MLP for barrier prediction from graph embeddings."""
+    """
+    MLP for barrier prediction from graph embeddings.
+    
+    Takes embeddings of initial and final structures and predicts
+    the energy barrier between them.
+    
+    Input features:
+    - Initial structure embedding
+    - Final structure embedding  
+    - Difference embedding (final - initial)
+    """
     
     def __init__(self, embedding_dim: int = 64, hidden_dims: list = None, dropout: float = 0.1):
         super().__init__()
@@ -467,6 +345,7 @@ class BarrierPredictor(nn.Module):
         if hidden_dims is None:
             hidden_dims = [512, 256, 128]
         
+        # Input: concatenation of initial, final, and difference embeddings
         input_dim = 3 * embedding_dim
         
         layers = []
@@ -481,33 +360,46 @@ class BarrierPredictor(nn.Module):
             ])
             prev_dim = hidden_dim
         
+        # Final layer: output single barrier value
         layers.append(nn.Linear(prev_dim, 1))
         
         self.network = nn.Sequential(*layers)
     
     def forward(self, emb_initial, emb_final):
+        """
+        Predict barrier from structure embeddings.
+        
+        Args:
+            emb_initial: Initial structure embedding [batch_size, embedding_dim]
+            emb_final: Final structure embedding [batch_size, embedding_dim]
+        
+        Returns:
+            Predicted barrier [batch_size, 1]
+        """
+        # Compute difference embedding
         delta_emb = emb_final - emb_initial
+        
+        # Concatenate all information
         combined = torch.cat([emb_initial, emb_final, delta_emb], dim=1)
+        
         return self.network(combined)
 
 
 class DiffusionBarrierModel(nn.Module):
     """
-    Full ALIGNN-style model for diffusion barriers.
+    Complete model for diffusion barrier prediction.
     
     Architecture:
-    1. Shared ALIGNN encoder (atom + line graph)
-    2. Barrier predictor (MLP)
+    1. Shared ALIGNN encoder for both structures
+    2. MLP predictor for barrier from embeddings
     
-    FIXED:
-    - Residual connections in encoders
-    - Correct line graph batching
-    - Normalized bond-to-atom aggregation
+    Uses learned atom embeddings instead of one-hot encoding.
     """
     
     def __init__(
         self,
-        node_input_dim: int,
+        num_elements: int,
+        atom_embedding_dim: int = 32,
         edge_input_dim: int = 1,
         gnn_hidden_dim: int = 64,
         gnn_num_layers: int = 5,
@@ -517,7 +409,7 @@ class DiffusionBarrierModel(nn.Module):
         use_line_graph: bool = True,
         line_graph_hidden_dim: int = 64,
         line_graph_num_layers: int = 3,
-        line_graph_embedding_dim: int = 64
+        use_atomic_properties: bool = True
     ):
         super().__init__()
         
@@ -525,9 +417,12 @@ class DiffusionBarrierModel(nn.Module):
             mlp_hidden_dims = [512, 256, 128]
         
         self.use_line_graph = use_line_graph
+        self.use_atomic_properties = use_atomic_properties
         
+        # Store model configuration for saving/loading
         self.model_config = {
-            'node_input_dim': node_input_dim,
+            'num_elements': num_elements,
+            'atom_embedding_dim': atom_embedding_dim,
             'edge_input_dim': edge_input_dim,
             'gnn_hidden_dim': gnn_hidden_dim,
             'gnn_num_layers': gnn_num_layers,
@@ -537,24 +432,26 @@ class DiffusionBarrierModel(nn.Module):
             'use_line_graph': use_line_graph,
             'line_graph_hidden_dim': line_graph_hidden_dim,
             'line_graph_num_layers': line_graph_num_layers,
-            'line_graph_embedding_dim': line_graph_embedding_dim
+            'use_atomic_properties': use_atomic_properties
         }
         
-        # Shared encoder (uses DualALIGNNEncoder which has all fixes)
-        self.encoder = DualALIGNNEncoder(
-            atom_node_dim=node_input_dim,
+        # Shared encoder for both initial and final structures
+        self.encoder = ALIGNNEncoder(
+            num_elements=num_elements,
+            atom_embedding_dim=atom_embedding_dim,
             atom_edge_dim=edge_input_dim,
-            line_node_dim=4,  # Bond vectors (3D)
-            line_edge_dim=1,  # Angles
+            line_node_dim=4,  # Bond vectors: normalized direction (3D) + length (1D)
+            line_edge_dim=1,  # Bond angles
             atom_hidden_dim=gnn_hidden_dim,
             line_hidden_dim=line_graph_hidden_dim,
             atom_num_layers=gnn_num_layers,
             line_num_layers=line_graph_num_layers,
             embedding_dim=gnn_embedding_dim,
-            use_line_graph=use_line_graph
+            use_line_graph=use_line_graph,
+            use_atomic_properties=use_atomic_properties
         )
         
-        # Predictor
+        # Predictor MLP
         self.predictor = BarrierPredictor(
             embedding_dim=gnn_embedding_dim,
             hidden_dims=mlp_hidden_dims,
@@ -562,15 +459,38 @@ class DiffusionBarrierModel(nn.Module):
         )
     
     def forward(self, initial_graph, final_graph):
+        """
+        Predict barrier between initial and final structures.
+        
+        Args:
+            initial_graph: PyG Data/Batch for initial structure
+            final_graph: PyG Data/Batch for final structure
+        
+        Returns:
+            Predicted barrier [batch_size, 1]
+        """
+        # Encode both structures with shared encoder
         emb_initial = self.encoder(initial_graph)
         emb_final = self.encoder(final_graph)
+        
+        # Predict barrier
         return self.predictor(emb_initial, emb_final)
 
 
-def create_model_from_config(config, node_input_dim: int):
-    """Create model from config."""
+def create_model_from_config(config, num_elements: int):
+    """
+    Create model from configuration object.
+    
+    Args:
+        config: Config object with model parameters
+        num_elements: Number of element types in dataset
+    
+    Returns:
+        DiffusionBarrierModel instance
+    """
     return DiffusionBarrierModel(
-        node_input_dim=node_input_dim,
+        num_elements=num_elements,
+        atom_embedding_dim=config.atom_embedding_dim,
         edge_input_dim=1,
         gnn_hidden_dim=config.gnn_hidden_dim,
         gnn_num_layers=config.gnn_num_layers,
@@ -580,12 +500,17 @@ def create_model_from_config(config, node_input_dim: int):
         use_line_graph=getattr(config, 'use_line_graph', True),
         line_graph_hidden_dim=getattr(config, 'line_graph_hidden_dim', 64),
         line_graph_num_layers=getattr(config, 'line_graph_num_layers', 3),
-        line_graph_embedding_dim=getattr(config, 'line_graph_embedding_dim', 64)
+        use_atomic_properties=getattr(config, 'use_atomic_properties', True)
     )
 
 
 def count_parameters(model):
-    """Count parameters."""
+    """
+    Count trainable parameters in model.
+    
+    Returns:
+        Dictionary with parameter counts for each component
+    """
     encoder_params = sum(p.numel() for p in model.encoder.parameters() if p.requires_grad)
     predictor_params = sum(p.numel() for p in model.predictor.parameters() if p.requires_grad)
     total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -599,34 +524,37 @@ def count_parameters(model):
 
 if __name__ == "__main__":
     print("="*70)
-    print("ALIGNN MODEL ARCHITECTURE (FIXED)")
+    print("ALIGNN MODEL WITH ATOM EMBEDDINGS")
     print("="*70)
     
-    node_input_dim = 12
+    # Test model creation
+    num_elements = 4  # Example: Mo, Nb, Cr, V
     
-    model = create_model_from_config(
-        type('Config', (), {
-            'gnn_hidden_dim': 64,
-            'gnn_num_layers': 5,
-            'gnn_embedding_dim': 64,
-            'mlp_hidden_dims': [512, 256, 128],
-            'dropout': 0.1,
-            'use_line_graph': True,
-            'line_graph_hidden_dim': 64,
-            'line_graph_num_layers': 3,
-            'line_graph_embedding_dim': 64
-        })(),
-        node_input_dim
+    model = DiffusionBarrierModel(
+        num_elements=num_elements,
+        atom_embedding_dim=32,
+        gnn_hidden_dim=64,
+        gnn_num_layers=5,
+        gnn_embedding_dim=64,
+        mlp_hidden_dims=[512, 256, 128],
+        dropout=0.1,
+        use_line_graph=True,
+        line_graph_hidden_dim=64,
+        line_graph_num_layers=3,
+        use_atomic_properties=True
     )
     
     params = count_parameters(model)
-    print(f"\n✓ Model created!")
-    print(f"\nFixes applied:")
-    print(f"  ✓ Residual connections in all conv layers")
-    print(f"  ✓ Correct line graph batching using batch mapping")
-    print(f"  ✓ Normalized bond-to-atom aggregation (mean instead of sum)")
+    
+    print(f"\nModel created successfully!")
     print(f"\nParameters:")
     print(f"  Encoder: {params['encoder']:,}")
     print(f"  Predictor: {params['predictor']:,}")
     print(f"  Total: {params['total']:,}")
+    
+    print(f"\nAtom Embedding:")
+    print(f"  Num elements: {num_elements}")
+    print(f"  Embedding dim: 32")
+    print(f"  Total embedding params: {num_elements * 32:,}")
+    
     print("\n" + "="*70)

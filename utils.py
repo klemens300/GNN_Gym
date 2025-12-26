@@ -1,15 +1,11 @@
 """
 Utility Functions for Model I/O and Prediction
 
-Functions:
-- set_seed: Set random seeds for reproducibility
-- get_node_input_dim: Calculate node feature dimension from builder
-- save_model_for_inference: Save model with metadata for later use
-- load_model_for_inference: Load model with validation
-- predict_single: Predict barrier for single structure pair
-- predict_batch: Predict barriers for multiple structure pairs
-- validate_elements: Check if elements match
-- print_model_info: Display model information
+Functions for:
+- Reproducibility (set_seed)
+- Model saving/loading with atom embeddings
+- Prediction utilities
+- Model information display
 """
 
 import torch
@@ -21,30 +17,17 @@ from torch_geometric.data import Batch
 from model import create_model_from_config, count_parameters
 
 
-# ============================================================================
-# REPRODUCIBILITY
-# ============================================================================
-
 def set_seed(seed: int = 42):
     """
     Set random seeds for reproducibility.
     
-    Sets seeds for:
-    - Python random
-    - NumPy
-    - PyTorch (CPU and CUDA)
+    Sets seeds for Python, NumPy, and PyTorch (CPU and CUDA).
+    
+    Note: Full determinism is disabled for CUDA operations to maintain
+    performance and compatibility with CuBLAS operations.
     
     Args:
         seed: Random seed value
-    
-    Example:
-        >>> set_seed(42)
-        >>> # All models initialized after this will be similar
-    
-    Note:
-        Full determinism is disabled for CUDA operations to avoid
-        performance penalties and compatibility issues with CuBLAS.
-        This provides good reproducibility while maintaining performance.
     """
     import random
     import numpy as np
@@ -55,50 +38,28 @@ def set_seed(seed: int = 42):
     
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)  # For multi-GPU setups
+        torch.cuda.manual_seed_all(seed)
     
-    # Disable strict determinism for CUDA compatibility
-    # CuBLAS operations are not deterministic in CUDA >= 10.2
+    # Disable strict determinism for better performance
     torch.backends.cudnn.deterministic = False
-    torch.backends.cudnn.benchmark = True  # Enable for better performance
-    
-    # Don't enforce deterministic algorithms (causes CUDA issues)
-    # If you need full determinism, set CUBLAS_WORKSPACE_CONFIG=:4096:8
-    # and uncomment the line below:
-    # torch.use_deterministic_algorithms(True)
+    torch.backends.cudnn.benchmark = True
 
-
-# ============================================================================
-# NODE FEATURE DIMENSION
-# ============================================================================
 
 def get_node_input_dim(builder) -> int:
     """
-    Calculate node input dimension from builder.
+    Calculate node input dimension for model.
     
-    Node features (rotation-invariant):
-    - One-hot element encoding (n_elements)
-    - 4 atomic properties (radius, mass, electronegativity, valence)
-    
-    NOTE: Cartesian positions removed for rotation invariance.
+    With atom embeddings, this is just the number of element types
+    (used for embedding table size, not as input dimension).
     
     Args:
-        builder: TemplateGraphBuilder instance
+        builder: GraphBuilder instance
     
     Returns:
-        node_input_dim: Total node feature dimension
-    
-    Example:
-        >>> builder = TemplateGraphBuilder(config)
-        >>> dim = get_node_input_dim(builder)
-        >>> print(f"Node input dim: {dim}")
+        Number of element types
     """
-    return len(builder.elements) + 8
+    return len(builder.elements)
 
-
-# ============================================================================
-# SAVE MODEL
-# ============================================================================
 
 def save_model_for_inference(
     model,
@@ -110,30 +71,23 @@ def save_model_for_inference(
     optimizer_state: dict = None
 ):
     """
-    Save model with full metadata for inference and resuming.
+    Save model with metadata for inference and resuming.
     
     Saves:
     - Model weights
     - Config parameters
     - Element information
     - Training metadata
-    - Optional: optimizer state
+    - Optimizer state (optional)
     
     Args:
         model: Model to save
         filepath: Save path
         config: Config object
-        builder: TemplateGraphBuilder (for element info)
+        builder: GraphBuilder (for element info)
         epoch: Current epoch (optional)
         metrics: Training metrics (optional)
         optimizer_state: Optimizer state dict (optional)
-    
-    Example:
-        >>> save_model_for_inference(
-        ...     model, 'checkpoints/best_model.pt',
-        ...     config, builder, epoch=100,
-        ...     metrics={'val_loss': 0.123}
-        ... )
     """
     filepath = Path(filepath)
     filepath.parent.mkdir(parents=True, exist_ok=True)
@@ -142,13 +96,18 @@ def save_model_for_inference(
     checkpoint = {
         'model_state_dict': model.state_dict(),
         'elements': builder.elements,
-        'node_input_dim': get_node_input_dim(builder),
+        'num_elements': len(builder.elements),
         'config': {
+            'atom_embedding_dim': config.atom_embedding_dim,
             'gnn_hidden_dim': config.gnn_hidden_dim,
             'gnn_num_layers': config.gnn_num_layers,
             'gnn_embedding_dim': config.gnn_embedding_dim,
             'mlp_hidden_dims': config.mlp_hidden_dims,
             'dropout': config.dropout,
+            'use_line_graph': config.use_line_graph,
+            'line_graph_hidden_dim': config.line_graph_hidden_dim,
+            'line_graph_num_layers': config.line_graph_num_layers,
+            'use_atomic_properties': config.use_atomic_properties
         },
         'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     }
@@ -166,37 +125,26 @@ def save_model_for_inference(
     # Save
     torch.save(checkpoint, filepath)
     
-    print(f"? Model saved: {filepath}")
+    print(f"Model saved: {filepath}")
 
-
-# ============================================================================
-# LOAD MODEL
-# ============================================================================
 
 def load_model_for_inference(filepath: str, config, validate: bool = False):
     """
     Load model for inference using Config parameters.
     
+    Model architecture is determined by Config, not checkpoint.
+    This allows using checkpoints with different configs.
+    
     Args:
         filepath: Path to checkpoint
-        config: Config object (provides elements and architecture)
-        validate: Whether to validate (default: False, not recommended)
+        config: Config object (provides architecture)
+        validate: Whether to validate elements match (optional, default: False)
     
     Returns:
-        model: Loaded model in eval mode
-        checkpoint: Full checkpoint dict (for metadata access)
+        Tuple of (model, checkpoint)
     
     Raises:
         FileNotFoundError: If checkpoint doesn't exist
-    
-    Note:
-        Model architecture is determined by Config, not checkpoint.
-        This allows using checkpoints with different configs.
-    
-    Example:
-        >>> model, checkpoint = load_model_for_inference(
-        ...     'checkpoints/best_model.pt', config
-        ... )
     """
     filepath = Path(filepath)
     
@@ -208,46 +156,44 @@ def load_model_for_inference(filepath: str, config, validate: bool = False):
     
     print(f"Loading model from: {filepath}")
     
-    # Get elements and node_input_dim from Config (not checkpoint)
-    from GNN_Gym.graph_builder import TemplateGraphBuilder
-    builder = TemplateGraphBuilder(config)
-    node_input_dim = len(builder.elements) + 4
+    # Get number of elements from Config
+    from graph_builder import GraphBuilder
+    builder = GraphBuilder(config)
+    num_elements = len(builder.elements)
     
     print(f"  Using Config:")
     print(f"    Elements: {builder.elements}")
-    print(f"    Node input dim: {node_input_dim}")
+    print(f"    Num elements: {num_elements}")
     
-    # Optional: Show checkpoint metadata if available
+    # Show checkpoint metadata if available
     if 'timestamp' in checkpoint:
         print(f"  Checkpoint saved: {checkpoint['timestamp']}")
     if 'epoch' in checkpoint:
         print(f"  Epoch: {checkpoint['epoch']}")
     if 'metrics' in checkpoint:
         print(f"  Metrics: {checkpoint['metrics']}")
+    if 'elements' in checkpoint:
+        print(f"  Checkpoint elements: {checkpoint['elements']}")
     
     # Create model with Config architecture
-    model = create_model_from_config(config, node_input_dim)
+    model = create_model_from_config(config, num_elements)
     
     # Load weights
     try:
         model.load_state_dict(checkpoint['model_state_dict'])
-        print(f"? Model loaded successfully")
+        print(f"Model loaded successfully")
     except Exception as e:
-        print(f"?  Warning: Could not load all weights: {e}")
-        print(f"   This may happen if model architecture changed")
+        print(f"Warning: Could not load all weights: {e}")
+        print(f"  This may happen if model architecture changed")
         # Try partial loading
         model.load_state_dict(checkpoint['model_state_dict'], strict=False)
-        print(f"? Model loaded (partial)")
+        print(f"Model loaded (partial)")
     
     # Set to eval mode
     model.eval()
     
     return model, checkpoint
 
-
-# ============================================================================
-# VALIDATION
-# ============================================================================
 
 def validate_elements(checkpoint_elements: List[str], current_elements: List[str]) -> bool:
     """
@@ -258,18 +204,10 @@ def validate_elements(checkpoint_elements: List[str], current_elements: List[str
         current_elements: Elements from current database
     
     Returns:
-        match: True if elements match
-    
-    Example:
-        >>> match = validate_elements(['Mo', 'W'], ['Mo', 'W'])
-        >>> print(f"Elements match: {match}")
+        True if elements match exactly
     """
     return checkpoint_elements == current_elements
 
-
-# ============================================================================
-# PREDICTION FUNCTIONS
-# ============================================================================
 
 def predict_single(
     model,
@@ -287,11 +225,7 @@ def predict_single(
         device: Device to use ('cpu' or 'cuda')
     
     Returns:
-        barrier: Predicted barrier (eV)
-    
-    Example:
-        >>> barrier = predict_single(model, initial_graph, final_graph)
-        >>> print(f"Predicted barrier: {barrier:.3f} eV")
+        Predicted barrier in eV
     """
     model.eval()
     device = torch.device(device)
@@ -317,6 +251,8 @@ def predict_batch(
     """
     Predict barriers for multiple structure pairs.
     
+    Processes in batches for efficiency.
+    
     Args:
         model: Trained model
         initial_graphs: List of initial structure graphs
@@ -325,13 +261,7 @@ def predict_batch(
         batch_size: Batch size for prediction
     
     Returns:
-        barriers: List of predicted barriers (eV)
-    
-    Example:
-        >>> barriers = predict_batch(
-        ...     model, initial_graphs, final_graphs, batch_size=64
-        ... )
-        >>> print(f"Predicted {len(barriers)} barriers")
+        List of predicted barriers in eV
     """
     model.eval()
     device = torch.device(device)
@@ -357,21 +287,19 @@ def predict_batch(
     return predictions
 
 
-# ============================================================================
-# MODEL INFO
-# ============================================================================
-
 def print_model_info(model, checkpoint: dict = None):
     """
     Print detailed model information.
     
+    Displays:
+    - Architecture details
+    - Parameter counts
+    - Checkpoint metadata
+    - Configuration
+    
     Args:
         model: Model to inspect
-        checkpoint: Optional checkpoint dict
-    
-    Example:
-        >>> model, checkpoint = load_model_for_inference(path, config)
-        >>> print_model_info(model, checkpoint)
+        checkpoint: Optional checkpoint dict with metadata
     """
     print("\n" + "="*70)
     print("MODEL INFORMATION")
@@ -393,8 +321,8 @@ def print_model_info(model, checkpoint: dict = None):
             print(f"  Epoch: {checkpoint['epoch']}")
         if 'elements' in checkpoint:
             print(f"  Elements: {checkpoint['elements']}")
-        if 'node_input_dim' in checkpoint:
-            print(f"  Node input dim: {checkpoint['node_input_dim']}")
+        if 'num_elements' in checkpoint:
+            print(f"  Num elements: {checkpoint['num_elements']}")
         if 'metrics' in checkpoint:
             print(f"  Metrics:")
             for key, value in checkpoint['metrics'].items():
@@ -412,38 +340,34 @@ def print_model_info(model, checkpoint: dict = None):
     print("="*70 + "\n")
 
 
-# ============================================================================
-# EXAMPLE USAGE
-# ============================================================================
-
 if __name__ == "__main__":
     from config import Config
-    from graph_builder import TemplateGraphBuilder
+    from graph_builder import GraphBuilder
     
     print("="*70)
-    print("UTILS MODULE (ROTATION INVARIANT)")
+    print("UTILS MODULE (ATOM EMBEDDINGS)")
     print("="*70)
     
     # Test set_seed
     print("\nTesting set_seed:")
     set_seed(42)
-    print("  ? Random seeds set to 42")
-    print("  Seeds are set for Python, NumPy, and PyTorch")
-    print("  Note: Strict determinism disabled for CUDA compatibility")
+    print("  Random seeds set to 42")
+    print("  Seeds set for Python, NumPy, and PyTorch")
     
     config = Config()
-    builder = TemplateGraphBuilder(config)
+    builder = GraphBuilder(config)
     
-    print("\nNode Input Dimension:")
-    dim = get_node_input_dim(builder)
-    print(f"  {dim} ({len(builder.elements)} elements + 4 features)")
-    print(f"  NOTE: Positions removed for rotation invariance")
+    print("\nNum Elements:")
+    num_elem = get_node_input_dim(builder)
+    print(f"  {num_elem} element types")
+    print(f"  Elements: {builder.elements}")
+    print(f"  Element indices: {builder.element_to_idx}")
     
     print("\nAvailable Functions:")
     print("  - set_seed(seed)")
     print("  - get_node_input_dim(builder)")
     print("  - save_model_for_inference(model, path, config, builder, ...)")
-    print("  - load_model_for_inference(path, config, validate=False)")
+    print("  - load_model_for_inference(path, config)")
     print("  - predict_single(model, initial_graph, final_graph)")
     print("  - predict_batch(model, initial_graphs, final_graphs)")
     print("  - validate_elements(checkpoint_elements, current_elements)")

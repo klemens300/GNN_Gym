@@ -1,21 +1,60 @@
 """
 Configuration for Diffusion Barrier Prediction
+
+Auto-generates paths based on element list for easy system switching.
 """
 
 from dataclasses import dataclass, field
 from typing import List
 from datetime import datetime
+from pathlib import Path
 
 
 @dataclass
 class Config:
     
     # ============================================================
-    # PATHS
+    # MATERIAL SYSTEM (Elements)
+    # Define elements here - all paths will be auto-generated
     # ============================================================
-    csv_path: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN/databases/MoNbCrV.csv"
-    checkpoint_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN/production/MoNbCrV/GNN_Gym/checkpoints"
-    database_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN/databases/MoNbCrV"
+    elements: List[str] = field(default_factory=lambda: ['Mo', 'Nb', 'Ta', 'W', 'Ti'])
+    
+    # ============================================================
+    # BASE DIRECTORIES
+    # Only these need to be changed for different file systems
+    # ============================================================
+    base_database_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN/databases"
+    base_production_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN/production"
+    
+    # ============================================================
+    # AUTO-GENERATED PATHS (do not modify directly)
+    # These are computed from elements and base directories
+    # ============================================================
+    def __post_init__(self):
+        """
+        Auto-generate all paths based on elements.
+        System name is created by alphabetically sorting elements.
+        Example: ['Mo', 'Nb', 'Cr', 'V'] -> 'CrMoNbV'
+        """
+        # Generate system name from alphabetically sorted elements
+        self.system_name = "".join(sorted(self.elements))
+        
+        # Training data paths (main CSV that grows during active learning)
+        self.csv_path = f"{self.base_database_dir}/{self.system_name}.csv"
+        self.database_dir = f"{self.base_database_dir}/{self.system_name}"
+        
+        # Test data paths (fixed test set, separate from training)
+        self.al_test_set_csv = f"{self.base_database_dir}/{self.system_name}_test.csv"
+        self.al_test_set_dir = f"{self.base_database_dir}/{self.system_name}_test"
+        
+        # Model checkpoint directory
+        self.checkpoint_dir = f"{self.base_production_dir}/{self.system_name}/GNN_Gym/checkpoints"
+        
+        # Results directory
+        self.al_results_dir = f"{self.base_production_dir}/{self.system_name}/GNN_Gym/active_learning_results"
+        
+        # Log directory
+        self.log_dir = f"{self.base_production_dir}/{self.system_name}/GNN_Gym/logs"
 
     # ============================================================
     # TRAINING MODE
@@ -29,11 +68,6 @@ class Config:
     calculator: str = "fairchem"
     fairchem_model: str = "uma-m-1p1"
     chgnet_model: str = "0.3.0"
-    
-    # ============================================================
-    # MATERIAL SYSTEM (Elements)
-    # ============================================================
-    elements: List[str] = field(default_factory=lambda: ['Mo', 'Nb', 'Cr', 'V'])
     
     # ============================================================
     # CRYSTAL STRUCTURE
@@ -65,26 +99,33 @@ class Config:
     random_seed: int = 42
     
     # ============================================================
-    # MODEL ARCHITECTURE - 
+    # ATOM EMBEDDINGS
+    # ============================================================
+    # Learned embeddings for each element type
+    atom_embedding_dim: int = 32           # Dimension of learned element embeddings
+    use_atomic_properties: bool = True      # Concatenate physical properties to embeddings
+    
+    # ============================================================
+    # MODEL ARCHITECTURE
     # ============================================================
     
     # Atom Graph (GNN Encoder)
-    gnn_hidden_dim: int = 128
+    gnn_hidden_dim: int = 64
     gnn_num_layers: int = 3
-    gnn_embedding_dim: int = 128
+    gnn_embedding_dim: int = 64
 
     # Line Graph (for bond angles)
     use_line_graph: bool = True
-    line_graph_hidden_dim: int = 128
-    line_graph_num_layers: int = 3
-    line_graph_embedding_dim: int = 128
+    line_graph_hidden_dim: int = gnn_hidden_dim
+    line_graph_num_layers: int = gnn_num_layers
+    line_graph_embedding_dim: int = gnn_embedding_dim
 
     # MLP Predictor
-    mlp_hidden_dims: List[int] = field(default_factory=lambda: [1024, 512, 256])
+    mlp_hidden_dims: List[int] = field(default_factory=lambda: [512, 256, 128])
     dropout: float = 0.1
     
     # ============================================================
-    # TRAINING - 
+    # TRAINING
     # ============================================================
     # Optimization
     learning_rate: float = 1e-3    
@@ -125,24 +166,24 @@ class Config:
     drop_last: bool = True            
     
     # ============================================================
-    # LEARNING RATE SCHEDULER - 
+    # LEARNING RATE SCHEDULER
     # ============================================================
     use_scheduler: bool = True
     scheduler_type: str = "cosine_warm_restarts"
     
-    # --- ReduceLROnPlateau ---
+    # ReduceLROnPlateau parameters
     plateau_factor: float = 0.5
     plateau_patience: int = 10
     
-    # --- StepLR ---
+    # StepLR parameters
     step_size: int = 100
     step_gamma: float = 0.5
     
-    # --- CosineAnnealingLR ---
+    # CosineAnnealingLR parameters
     cosine_t_max: int = 100
     cosine_eta_min: float = 1e-6
     
-    # --- CosineAnnealingWarmRestarts --- 
+    # CosineAnnealingWarmRestarts parameters
     warm_restart_t_0: int = 500
     warm_restart_t_mult: float = 1.2
     warm_restart_eta_min: float = 1e-4  
@@ -169,15 +210,13 @@ class Config:
     # ============================================================
     # ACTIVE LEARNING - FIXED TEST SET
     # ============================================================
-    # Test set (FIXED for all cycles, separate CSV)
+    # Test set (fixed for all cycles, stored separately from training data)
     al_test_set_size: int = 1000
     al_test_set_strategy: str = "uniform"  # "uniform", "sobol", or "grid"
-    al_test_set_csv: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN/databases/MoNbCrV_test.csv"
-    al_test_set_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN/databases/MoNbCrV_test"
     
-    # Training set (grows with each cycle, MAIN CSV)
-    al_initial_training_samples: int = 1000
-    al_n_query: int = 250  # Added to TRAINING set each cycle
+    # Training set (grows with each cycle via query samples)
+    al_initial_training_samples: int = 5000
+    al_n_query: int = 2500  # Number of query samples added to training set each cycle
     
     # Active Learning Loop
     al_query_strategy: str = 'error_weighted'
@@ -188,12 +227,10 @@ class Config:
     al_convergence_threshold_mae: float = 0.01
     al_convergence_threshold_rel_mae: float = 0.1
     al_convergence_patience: int = 2000
-    al_results_dir: str = "active_learning_results"
     
     # ============================================================
     # LOGGING
     # ============================================================
-    log_dir: str = "logs"
     log_level: str = "INFO"
     log_to_console: bool = True
     
@@ -206,7 +243,7 @@ class Config:
     # WEIGHTS & BIASES
     # ============================================================
     use_wandb: bool = True
-    wandb_project: str = "MoNbCrV"
+    wandb_project: str = None  # Auto-set to system_name if None
     wandb_entity: str = None
     wandb_run_name: str = None
     wandb_tags: List[str] = field(default_factory=list)
@@ -221,11 +258,8 @@ class Config:
         mlp_str = "-".join(map(str, self.mlp_hidden_dims))
         scheduler = self.scheduler_type if self.use_scheduler else "none"
         
-        # Element string for identification
-        elements_str = "".join(sorted(self.elements))
-        
-        # Start with timestamp, elements, and "barrier"
-        parts = [timestamp, elements_str, "barrier"]
+        # Use system name
+        parts = [timestamp, self.system_name, "barrier"]
         
         if n_samples is not None:
             parts.append(f"N{n_samples}")
@@ -249,10 +283,7 @@ class Config:
         """Generate experiment name for wandb."""
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         
-        # Element string
-        elements_str = "".join(sorted(self.elements))
-        
-        parts = [timestamp, elements_str, "barrier"]
+        parts = [timestamp, self.system_name, "barrier"]
         
         if n_samples is not None:
             parts.append(f"samples{n_samples}")
@@ -261,19 +292,54 @@ class Config:
             parts.append(f"cycle{cycle}")
         
         return "-".join(parts)
+    
+    def print_paths(self):
+        """Print all auto-generated paths for verification."""
+        print("="*70)
+        print("AUTO-GENERATED PATHS")
+        print("="*70)
+        print(f"System: {self.system_name}")
+        print(f"Elements: {self.elements}")
+        print()
+        print("Training Data:")
+        print(f"  CSV: {self.csv_path}")
+        print(f"  Dir: {self.database_dir}")
+        print()
+        print("Test Data:")
+        print(f"  CSV: {self.al_test_set_csv}")
+        print(f"  Dir: {self.al_test_set_dir}")
+        print()
+        print("Model & Results:")
+        print(f"  Checkpoints: {self.checkpoint_dir}")
+        print(f"  Results: {self.al_results_dir}")
+        print(f"  Logs: {self.log_dir}")
+        print("="*70)
 
 
 # Display config
 if __name__ == "__main__":
     print("="*70)
-    print("CONFIG")
+    print("CONFIG TEST")
     print("="*70)
     
-    config = Config()
+    # Test 1: MoNbCrV system
+    print("\nTest 1: MoNbCrV")
+    config1 = Config(elements=['Mo', 'Nb', 'Cr', 'V'])
+    config1.print_paths()
+    
+    # Test 2: MoNbTaWTi system
+    print("\nTest 2: MoNbTaWTi")
+    config2 = Config(elements=['Mo', 'Nb', 'Ta', 'W', 'Ti'])
+    config2.print_paths()
+    
+    # Test 3: Binary system
+    print("\nTest 3: MoW")
+    config3 = Config(elements=['Mo', 'W'])
+    config3.print_paths()
     
     print("\nExample model names:")
-    print(f"  Cycle 0: {config.get_model_name(n_samples=5000, cycle=0)}")
-    print(f"  Cycle 5: {config.get_model_name(n_samples=10000, cycle=5)}")
-    print(f"  Final:   {config.get_model_name(n_samples=25000)}")
+    print(f"  Cycle 0: {config1.get_model_name(n_samples=5000, cycle=0)}")
+    print(f"  Cycle 5: {config1.get_model_name(n_samples=10000, cycle=5)}")
+    print(f"  Final:   {config1.get_model_name(n_samples=25000)}")
     
     print("\n" + "="*70)

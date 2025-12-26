@@ -1,12 +1,9 @@
 """
 PyTorch Dataset and DataLoaders for Diffusion Barrier Prediction
 
-🔥 UPDATED: Uses GraphBuilder with real geometry (no more templates!)
-
-Key Change:
-- Each sample gets edges/distances from its own CIF file
-- No more template caching (not needed anymore)
-- Slower but CORRECT for learning
+Uses GraphBuilder with atom embeddings (element indices + optional properties).
+Graphs are built on-the-fly from CIF files with real geometry.
+NPZ caching is handled automatically by GraphBuilder.
 """
 
 import pandas as pd
@@ -16,14 +13,18 @@ from torch_geometric.data import Batch
 from pathlib import Path
 import numpy as np
 
-from graph_builder import GraphBuilder  # ← Changed from TemplateGraphBuilder!
+from graph_builder import GraphBuilder
 
 
 class DiffusionBarrierDataset(Dataset):
     """
     Dataset for diffusion barriers with on-the-fly graph construction.
     
-    🔥 CRITICAL: Now uses REAL geometry from CIF files!
+    Uses GraphBuilder with atom embeddings:
+    - Element indices for embedding lookup
+    - Optional atomic properties
+    - Real geometry from CIF files
+    - Automatic NPZ caching for 10x speedup
     """
     
     def __init__(
@@ -37,18 +38,12 @@ class DiffusionBarrierDataset(Dataset):
         """
         Initialize dataset.
         
-        Parameters:
-        -----------
-        csv_path : str
-            Path to CSV database
-        config : Config
-            Configuration object
-        min_barrier : float, optional
-            Minimum barrier cutoff (eV)
-        max_barrier : float, optional
-            Maximum barrier cutoff (eV)
-        indices : list, optional
-            Subset indices (for train/val split)
+        Args:
+            csv_path: Path to CSV database
+            config: Configuration object
+            min_barrier: Minimum barrier cutoff in eV (optional)
+            max_barrier: Maximum barrier cutoff in eV (optional)
+            indices: Subset indices for train/val split (optional)
         """
         self.csv_path = csv_path
         self.config = config
@@ -73,7 +68,7 @@ class DiffusionBarrierDataset(Dataset):
         
         final_count = len(self.df)
         
-        # Create graph builder (no more template!)
+        # Create graph builder (with atom embeddings + NPZ caching)
         self.graph_builder = GraphBuilder(config, csv_path=csv_path)
         
         # Print info
@@ -91,16 +86,14 @@ class DiffusionBarrierDataset(Dataset):
         """
         Get single sample.
         
-        🔥 CRITICAL: Graphs are built from scratch with real CIF geometry!
+        Builds graphs from CIF files with:
+        - Element indices for embedding lookup
+        - Optional atomic properties
+        - Real geometry (edges and distances)
+        - Automatic NPZ caching (10x faster loading)
         
         Returns:
-        --------
-        initial_graph : Data
-            Initial structure graph with real geometry
-        final_graph : Data
-            Final structure graph with real geometry
-        barrier : float
-            Backward barrier
+            Tuple of (initial_graph, final_graph, barrier)
         """
         # Get row from CSV
         row = self.df.iloc[idx]
@@ -108,7 +101,7 @@ class DiffusionBarrierDataset(Dataset):
         # Get CIF paths
         structure_folder = Path(row['structure_folder'])
         
-        # Make path absolute if it's relative
+        # Make path absolute if relative
         if not structure_folder.is_absolute():
             csv_parent = Path(self.csv_path).parent
             structure_folder = csv_parent / structure_folder
@@ -119,7 +112,12 @@ class DiffusionBarrierDataset(Dataset):
         # Get barrier
         barrier = row['backward_barrier_eV']
         
-        # Build graphs from CIF files (with REAL geometry!)
+        # Build graphs from CIF files
+        # GraphBuilder automatically:
+        # - Tries NPZ first (fast!)
+        # - Falls back to CIF if needed
+        # - Creates NPZ for next time
+        # - Caches in RAM if enabled
         initial_graph, final_graph = self.graph_builder.build_pair_graph(
             str(initial_cif),
             str(final_cif),
@@ -145,21 +143,13 @@ def collate_fn(batch: list) -> tuple:
     """
     Collate function for batching graph pairs.
     
-    Combines individual samples into batches.
+    Combines individual samples into batches for efficient GPU processing.
     
-    Parameters:
-    -----------
-    batch : list
-        List of (initial_graph, final_graph, barrier) tuples
+    Args:
+        batch: List of (initial_graph, final_graph, barrier) tuples
     
     Returns:
-    --------
-    initial_batch : Batch
-        Batched initial graphs
-    final_batch : Batch
-        Batched final graphs
-    barriers : Tensor [batch_size]
-        Barriers
+        Tuple of (initial_batch, final_batch, barriers)
     """
     # Separate components
     initial_graphs = [item[0] for item in batch]
@@ -167,6 +157,7 @@ def collate_fn(batch: list) -> tuple:
     barriers = [item[2] for item in batch]
     
     # Batch graphs using PyG
+    # This creates sparse block-diagonal adjacency matrix
     initial_batch = Batch.from_data_list(initial_graphs)
     final_batch = Batch.from_data_list(final_graphs)
     
@@ -184,32 +175,23 @@ def create_dataloaders(
     """
     Create train and validation dataloaders.
     
-    🔥 UPDATED: No more template caching (graphs built from scratch)
-    
     Simple workflow:
     1. Load all data from CSV
-    2. Apply barrier filtering
+    2. Apply barrier filtering (if configured)
     3. Random split into train/val
-    4. Create dataloaders with optimizations
+    4. Create optimized dataloaders with:
+       - Multi-worker loading
+       - Pin memory for GPU transfer
+       - Persistent workers to avoid respawning
+       - Prefetching for pipeline parallelism
     
-    Parameters:
-    -----------
-    config : Config
-        Configuration object with:
-        - csv_path
-        - batch_size
-        - num_workers
-        - min_barrier (optional)
-        - max_barrier (optional)
-    val_split : float
-        Validation split ratio (default: 0.1 = 10%)
-    random_seed : int
-        Random seed for reproducibility
+    Args:
+        config: Configuration object with paths and parameters
+        val_split: Validation split ratio (default: 0.1 = 10%)
+        random_seed: Random seed for reproducibility
     
     Returns:
-    --------
-    train_loader : DataLoader
-    val_loader : DataLoader (or None if val_split=0)
+        Tuple of (train_loader, val_loader) or (train_loader, None) if no validation
     """
     csv_path = config.csv_path
     
@@ -218,7 +200,7 @@ def create_dataloaders(
     max_barrier = getattr(config, 'max_barrier', None)
     
     print("\n" + "="*70)
-    print("CREATING DATALOADERS (REAL GEOMETRY MODE)")
+    print("CREATING DATALOADERS (ATOM EMBEDDINGS + NPZ CACHING)")
     print("="*70)
     
     # Load full dataset with filtering
@@ -245,7 +227,7 @@ def create_dataloaders(
     print(f"\nDataset statistics:")
     print(f"  Samples: {stats['count']}")
     print(f"  Barrier range: [{stats['min']:.3f}, {stats['max']:.3f}] eV")
-    print(f"  Barrier mean: {stats['mean']:.3f} ± {stats['std']:.3f} eV")
+    print(f"  Barrier mean: {stats['mean']:.3f} +/- {stats['std']:.3f} eV")
     
     # Train/Val split
     if val_split > 0 and total_samples >= 10:
@@ -289,7 +271,7 @@ def create_dataloaders(
         prefetch_factor = getattr(config, 'prefetch_factor', 2)
         drop_last = getattr(config, 'drop_last', False)
         
-        print(f"\n🔥 DataLoader optimization:")
+        print(f"\nDataLoader optimization:")
         print(f"  num_workers: {num_workers}")
         print(f"  pin_memory: {num_workers > 0}")
         print(f"  persistent_workers: {num_workers > 0}")
@@ -307,8 +289,8 @@ def create_dataloaders(
             num_workers=num_workers,
             pin_memory=True if num_workers > 0 else False,
             persistent_workers=True if num_workers > 0 else False,
-            prefetch_factor=prefetch_factor if num_workers > 0 else None,  # 🔥 Preload batches!
-            drop_last=drop_last  # 🔥 Consistent batch sizes
+            prefetch_factor=prefetch_factor if num_workers > 0 else None,
+            drop_last=drop_last
         )
         
         val_loader = DataLoader(
@@ -319,95 +301,76 @@ def create_dataloaders(
             num_workers=num_workers,
             pin_memory=True if num_workers > 0 else False,
             persistent_workers=True if num_workers > 0 else False,
-            prefetch_factor=prefetch_factor if num_workers > 0 else None
+            prefetch_factor=prefetch_factor if num_workers > 0 else None,
+            drop_last=False  # Never drop last for validation
         )
         
-        print(f"\n✓ Dataloaders created:")
-        print(f"  Train: {len(train_loader)} batches")
-        print(f"  Val: {len(val_loader)} batches")
-        print("="*70 + "\n")
+        print("="*70)
+        print()
         
         return train_loader, val_loader
     
     else:
         # No validation split
-        print(f"\nNo validation split")
+        print(f"\nNo validation split (total samples: {total_samples})")
         
         num_workers = getattr(config, 'num_workers', 0)
+        batch_size = config.batch_size
+        prefetch_factor = getattr(config, 'prefetch_factor', 2)
+        drop_last = getattr(config, 'drop_last', False)
+        
+        print(f"\nDataLoader optimization:")
+        print(f"  num_workers: {num_workers}")
+        print(f"  pin_memory: {num_workers > 0}")
+        print(f"  persistent_workers: {num_workers > 0}")
+        print(f"  prefetch_factor: {prefetch_factor if num_workers > 0 else 'N/A'}")
+        print(f"  drop_last: {drop_last}")
+        print(f"  batch_size: {batch_size}")
         
         train_loader = DataLoader(
             full_dataset,
-            batch_size=config.batch_size,
+            batch_size=batch_size,
             shuffle=True,
             collate_fn=collate_fn,
             num_workers=num_workers,
             pin_memory=True if num_workers > 0 else False,
-            persistent_workers=True if num_workers > 0 else False
+            persistent_workers=True if num_workers > 0 else False,
+            prefetch_factor=prefetch_factor if num_workers > 0 else None,
+            drop_last=drop_last
         )
         
-        print(f"\n✓ Train loader created:")
-        print(f"  Train: {len(train_loader)} batches")
-        print(f"  num_workers: {num_workers}")
-        print("="*70 + "\n")
+        print("="*70)
+        print()
         
         return train_loader, None
 
 
-# Test script
+# Test function
 if __name__ == "__main__":
     from config import Config
-    import time
     
-    print("\n" + "="*70)
-    print("DATASET TEST (REAL GEOMETRY MODE)")
-    print("="*70)
+    print("Testing Dataset with AtomEmbeddings and NPZ caching...")
     
-    # Setup config
+    # Create config
     config = Config()
-    config.batch_size = 4
     
     # Create dataloaders
-    print("\n🔥 WARNING: This will be slower than template mode!")
-    print("   Each graph is computed from CIF (no caching)")
-    print("   But this is CORRECT for learning!\n")
-    
-    start = time.time()
     train_loader, val_loader = create_dataloaders(
         config,
-        val_split=0.2
+        val_split=0.1,
+        random_seed=42
     )
-    elapsed = time.time() - start
     
-    print(f"\n✓ DataLoaders created in {elapsed:.2f}s")
+    # Get one batch
+    print("\nFetching one batch...")
+    initial_batch, final_batch, barriers = next(iter(train_loader))
     
-    # Test iteration
-    print("\nTesting batch iteration:")
-    for i, (initial_batch, final_batch, barriers) in enumerate(train_loader):
-        print(f"\nBatch {i+1}:")
-        print(f"  Initial graphs:")
-        print(f"    Total nodes: {initial_batch.num_nodes}")
-        print(f"    Num graphs: {initial_batch.num_graphs}")
-        print(f"    Node features: {initial_batch.x.shape}")
-        print(f"    Edge distances: {initial_batch.edge_attr.shape}")
-        print(f"      Min: {initial_batch.edge_attr.min():.3f} Å")
-        print(f"      Max: {initial_batch.edge_attr.max():.3f} Å")
-        print(f"  Final graphs:")
-        print(f"    Total nodes: {final_batch.num_nodes}")
-        print(f"    Num graphs: {final_batch.num_graphs}")
-        print(f"  Barriers: {barriers.shape}")
-        print(f"    Range: [{barriers.min():.3f}, {barriers.max():.3f}] eV")
-        
-        if i >= 2:  # Only show first 3 batches
-            break
+    print(f"\nBatch contents:")
+    print(f"  Initial graphs: {initial_batch.num_graphs} graphs")
+    print(f"  Initial atoms: {initial_batch.num_nodes} total atoms")
+    print(f"  Initial edges: {initial_batch.num_edges} total edges")
+    print(f"  Element indices shape: {initial_batch.x_element.shape}")
+    print(f"  Barriers shape: {barriers.shape}")
+    print(f"  Barriers: {barriers.tolist()}")
     
-    # Speed test
-    print("\nSpeed test (10 batches):")
-    start = time.time()
-    for i, (initial_batch, final_batch, barriers) in enumerate(train_loader):
-        if i >= 10:
-            break
-    elapsed = time.time() - start
-    print(f"  Loaded 10 batches in {elapsed:.2f}s ({elapsed/10:.2f}s per batch)")
-    print(f"  Note: This is slower than template mode, but CORRECT!")
-    
-    print("\n" + "="*70)
+    print("\nDataset test successful! ?")
