@@ -23,8 +23,8 @@ class Config:
     # BASE DIRECTORIES
     # Only these need to be changed for different file systems
     # ============================================================
-    base_database_dir: str = "home/klemens/databases/MoNbTaW"
-    base_production_dir: str = "home/klemens/databases/MoNbTaW"
+    base_database_dir: str = "/home/klemens/databases"
+    base_production_dir: str = "/home/klemens/databases"
     
     # ============================================================
     # AUTO-GENERATED PATHS (do not modify directly)
@@ -136,9 +136,9 @@ class Config:
     # TRAINING
     # ============================================================
     # Optimization
-    learning_rate: float = 1e-3    
+    learning_rate: float = 1e-4    
     weight_decay: float = 0.01
-    gradient_clip_norm: float = 1.0
+    gradient_clip_norm: float = 5.0
     
     # Training loop
     epochs: int = 10000
