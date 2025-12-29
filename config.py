@@ -59,6 +59,14 @@ class Config:
     # ============================================================
     # TRAINING MODE
     # ============================================================
+
+    # ============================================================
+    # BARRIER VALIDATION (Oracle)
+    # ============================================================
+    barrier_min_cutoff: float = 0.0    # Minimum barrier to save (eV)
+    barrier_max_cutoff: float = 5.0    # Maximum barrier to save (eV)
+
+
     train_only_mode: bool = False
     train_only_skip_cycles: bool = False
     
@@ -92,7 +100,7 @@ class Config:
     
     # Data cleanup (barrier filtering)
     min_barrier: float = 0.0
-    max_barrier: float = 50.0
+    max_barrier: float = 5.0
     
     # Train/Val split
     val_split: float = 0.1

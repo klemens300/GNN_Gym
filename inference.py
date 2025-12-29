@@ -164,7 +164,7 @@ def generate_test_data_with_oracle(
         test_data: DataFrame with columns:
             - composition_string
             - structure_folder
-            - oracle_barrier
+            - backward_barrier_eV
     
     Example:
         >>> test_data = generate_test_data_with_oracle(
@@ -189,7 +189,7 @@ def generate_test_data_with_oracle(
             results.append({
                 'composition_string': last_entry['composition_string'],
                 'structure_folder': last_entry['structure_folder'],
-                'oracle_barrier': last_entry['backward_barrier_eV']
+                'backward_barrier_eV': last_entry['backward_barrier_eV']
             })
     
     # Cleanup after Oracle operations
@@ -213,7 +213,7 @@ def predict_barriers_for_test_set(
     
     Args:
         model_path: Path to trained model checkpoint
-        test_data: DataFrame with structure_folder and oracle_barrier columns
+        test_data: DataFrame with structure_folder and backward_barrier_eV columns
         config: Config object
         verbose: Print progress
     
@@ -247,7 +247,14 @@ def predict_barriers_for_test_set(
     
     for idx, row in iterator:
         structure_folder = Path(row['structure_folder'])
-        oracle_barrier = row['oracle_barrier']
+        
+        # ? FIX: Use correct column name from CSV
+        oracle_barrier = row['backward_barrier_eV']
+        
+        # Make path absolute if needed
+        if not structure_folder.is_absolute():
+            csv_parent = Path(config.csv_path).parent
+            structure_folder = csv_parent / structure_folder
         
         # Build graphs
         initial_cif = structure_folder / "initial_relaxed.cif"
@@ -795,7 +802,7 @@ if __name__ == "__main__":
     print("  2. Oracle-based test data generation")
     print("  3. Model predictions")
     print("  4. Error-weighted query strategy")
-    print("  5. Convergence checking (NEW!)")
+    print("  5. Convergence checking")
     print("  6. Complete inference cycle")
     
     print("\nUsage:")

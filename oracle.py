@@ -586,7 +586,8 @@ class Oracle:
         5. Move neighbor to vacancy ? final structure
         6. Relax final structure
         7. Run NEB
-        8. Save everything (CIF + NPZ)
+        8. VALIDATE barriers (cutoff check)
+        9. Save everything (CIF + NPZ) ONLY if valid
         
         Parameters:
         -----------
@@ -596,7 +597,7 @@ class Oracle:
         Returns:
         --------
         success : bool
-            True if calculation successful
+            True if calculation successful AND barriers within cutoff range
         """
         calc_start = time.time()
         
@@ -637,7 +638,38 @@ class Oracle:
             
             total_time = time.time() - calc_start
             
-            # 8. Save everything
+            # ========================================================================
+            # 8. VALIDATE BARRIERS (NEW!)
+            # ========================================================================
+            barrier_min = getattr(self.config, 'barrier_min_cutoff', 0.0)
+            barrier_max = getattr(self.config, 'barrier_max_cutoff', 5.0)
+            
+            # Check if barriers are within acceptable range
+            barriers_valid = (
+                barrier_min <= forward_barrier <= barrier_max and
+                barrier_min <= backward_barrier <= barrier_max
+            )
+            
+            if not barriers_valid:
+                self.logger.warning(f"??  REJECTED: Barriers outside cutoff range!")
+                self.logger.warning(f"  Forward barrier: {forward_barrier:.3f} eV")
+                self.logger.warning(f"  Backward barrier: {backward_barrier:.3f} eV")
+                self.logger.warning(f"  Allowed range: [{barrier_min:.1f}, {barrier_max:.1f}] eV")
+                self.logger.warning(f"  Composition: {comp_string}")
+                self.logger.warning(f"  ? Data NOT saved to database")
+                
+                # Cleanup and return False
+                del initial_unrelaxed, initial_relaxed, final_unrelaxed, final_relaxed
+                del neb_images
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                
+                return False
+            
+            # ========================================================================
+            # 9. Save everything (ONLY if barriers valid!)
+            # ========================================================================
             run_dir = self.database_dir / comp_string / f"run_{run_number}"
             run_dir.mkdir(parents=True, exist_ok=True)
             
@@ -651,7 +683,7 @@ class Oracle:
             for i, img in enumerate(neb_images):
                 write(run_dir / f"neb_image_{i}.cif", img)
             
-            # NEW: Save structures (NPZ) for fast loading
+            # Save structures (NPZ) for fast loading
             self._save_structure_as_npz(initial_unrelaxed, run_dir / "initial_unrelaxed.npz")
             self._save_structure_as_npz(initial_relaxed, run_dir / "initial_relaxed.npz")
             self._save_structure_as_npz(final_unrelaxed, run_dir / "final_unrelaxed.npz")
