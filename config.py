@@ -17,14 +17,14 @@ class Config:
     # MATERIAL SYSTEM (Elements)
     # Define elements here - all paths will be auto-generated
     # ============================================================
-    elements: List[str] = field(default_factory=lambda: ['Mo', 'Nb', 'Cr', 'V'])
+    elements: List[str] = field(default_factory=lambda: ['Mo', 'Nb', 'Ta', 'W'])
     
     # ============================================================
     # BASE DIRECTORIES
     # Only these need to be changed for different file systems
     # ============================================================
-    base_database_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN/databases"
-    base_production_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN/production"
+    base_database_dir: str = "home/klemens/databases/MoNbTaW"
+    base_production_dir: str = "home/klemens/databases/MoNbTaW"
     
     # ============================================================
     # AUTO-GENERATED PATHS (do not modify directly)
@@ -67,8 +67,8 @@ class Config:
     barrier_max_cutoff: float = 5.0    # Maximum barrier to save (eV)
 
 
-    train_only_mode: bool = False
-    train_only_skip_cycles: bool = False
+    train_only_mode: bool = True
+    train_only_skip_cycles: bool = True
     
     # ============================================================
     # CALCULATOR SETTINGS
