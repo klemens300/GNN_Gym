@@ -17,7 +17,7 @@ class Config:
     # MATERIAL SYSTEM (Elements)
     # Define elements here - all paths will be auto-generated
     # ============================================================
-    elements: List[str] = field(default_factory=lambda: ['Mo', 'Nb', 'Ta', 'W', 'Ti'])
+    elements: List[str] = field(default_factory=lambda: ['Mo', 'Nb', 'Cr', 'V'])
     
     # ============================================================
     # BASE DIRECTORIES
