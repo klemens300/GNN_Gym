@@ -61,6 +61,14 @@ class Config:
     # ============================================================
 
     # ============================================================
+    # LMDB DATASET (Fast Loading)
+    # ============================================================
+    use_lmdb: bool = False              # Use LMDB for training (much faster!)
+    lmdb_path: str = None               # Path to LMDB (auto-generated if None)
+    rebuild_lmdb_after_cycle: bool = False  # Auto-rebuild after AL cycle
+    lmdb_num_workers_build: int = 0    # Workers for building LMDB (-1 = auto)
+
+    # ============================================================
     # BARRIER VALIDATION (Oracle)
     # ============================================================
     barrier_min_cutoff: float = 0.0    # Minimum barrier to save (eV)
@@ -74,7 +82,7 @@ class Config:
     # CALCULATOR SETTINGS
     # ============================================================
     calculator: str = "fairchem"
-    fairchem_model: str = "uma-m-1p1"
+    fairchem_model: str = "uma-s-1p1"
     chgnet_model: str = "0.3.0"
     
     # ============================================================
@@ -96,15 +104,15 @@ class Config:
     # ============================================================
     batch_size: int = 128            
     batch_size_val: int = 128         
-    num_workers: int = 16              
+    num_workers: int = 4              
     
     # Data cleanup (barrier filtering)
     min_barrier: float = 0.0
     max_barrier: float = 5.0
     
     # Train/Val split
-    val_split: float = 0.1
-    random_seed: int = 42
+    val_split: float = 0.2
+    random_seed: int = 41
     
     # ============================================================
     # ATOM EMBEDDINGS
@@ -130,15 +138,15 @@ class Config:
 
     # MLP Predictor
     mlp_hidden_dims: List[int] = field(default_factory=lambda: [512, 256, 128])
-    dropout: float = 0.1
+    dropout: float = 0.2
     
     # ============================================================
     # TRAINING
     # ============================================================
     # Optimization
     learning_rate: float = 1e-4    
-    weight_decay: float = 0.01
-    gradient_clip_norm: float = 5.0
+    weight_decay: float = 0.03
+    gradient_clip_norm: float = 0.5
     
     # Training loop
     epochs: int = 10000
@@ -170,7 +178,7 @@ class Config:
     # ============================================================
     # DATALOADER OPTIMIZATION
     # ============================================================
-    prefetch_factor: int = 4          
+    prefetch_factor: int = 2          
     drop_last: bool = True            
     
     # ============================================================
@@ -255,7 +263,7 @@ class Config:
     wandb_entity: str = None
     wandb_run_name: str = None
     wandb_tags: List[str] = field(default_factory=list)
-    wandb_notes: str = "."
+    wandb_notes: str = "weight decay = 0.1 -> 0.3, dropout = 0.1 -> 0.2, gradient_clip_norm = 2.0 -> 0.5"
     wandb_log_interval: int = 1
     wandb_watch_model: bool = True
     wandb_watch_freq: int = 10

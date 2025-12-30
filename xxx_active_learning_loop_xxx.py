@@ -429,11 +429,21 @@ def active_learning_loop(config: Config, logger: logging.Logger):
                 continue
         
         # ========== GENERATE QUERY DATA (ADDED TO TRAINING SET!) ==========
+        if config.use_lmdb and config.rebuild_lmdb_after_cycle:
+            logger.info("")
+            logger.info("="*70)
+            logger.info("REBUILDING LMDB (new samples added)")
+            logger.info("="*70)
+            
+            from build_lmdb_dataset import build_lmdb_from_config
+            build_lmdb_from_config(config, force_rebuild=True)
+            
+            logger.info("✅ LMDB rebuilt successfully")
+            
         if config.train_only_skip_cycles:
             logger.info("Skipping query generation")
         else:
             logger.info(f"Generating {config.al_n_query} query samples...")
-            logger.info(f"  ??  These will be ADDED to training set (MAIN CSV)!")
             
             train_stats_before = get_database_stats(config.csv_path)
             

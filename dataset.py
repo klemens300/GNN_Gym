@@ -172,6 +172,10 @@ def create_dataloaders(
     val_split: float = 0.1,
     random_seed: int = 42
 ) -> tuple:
+    
+    if getattr(config, 'use_lmdb', False):
+        from lmdb_dataset import create_lmdb_dataloaders
+        return create_lmdb_dataloaders(config, val_split, random_seed)
     """
     Create train and validation dataloaders.
     
