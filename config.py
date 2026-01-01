@@ -132,9 +132,9 @@ class Config:
 
     # Line Graph (for bond angles)
     use_line_graph: bool = True
-    line_graph_hidden_dim: int = gnn_hidden_dim
-    line_graph_num_layers: int = gnn_num_layers
-    line_graph_embedding_dim: int = gnn_embedding_dim
+    line_graph_hidden_dim: int = 64
+    line_graph_num_layers: int = 3
+    line_graph_embedding_dim: int = 64
 
     # MLP Predictor
     mlp_hidden_dims: List[int] = field(default_factory=lambda: [512, 256, 128])
