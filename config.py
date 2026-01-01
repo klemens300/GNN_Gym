@@ -23,8 +23,8 @@ class Config:
     # BASE DIRECTORIES
     # Only these need to be changed for different file systems
     # ============================================================
-    base_database_dir: str = "/home/klemens/databases"
-    base_production_dir: str = "/home/klemens/databases"
+    base_database_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN/databases"
+    base_production_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN/production"
     
     # ============================================================
     # AUTO-GENERATED PATHS (do not modify directly)
@@ -71,12 +71,12 @@ class Config:
     # ============================================================
     # BARRIER VALIDATION (Oracle)
     # ============================================================
-    barrier_min_cutoff: float = 0.0    # Minimum barrier to save (eV)
+    barrier_min_cutoff: float = 0.1    # Minimum barrier to save (eV)
     barrier_max_cutoff: float = 5.0    # Maximum barrier to save (eV)
 
 
-    train_only_mode: bool = True
-    train_only_skip_cycles: bool = True
+    train_only_mode: bool = False
+    train_only_skip_cycles: bool = False
     
     # ============================================================
     # CALCULATOR SETTINGS
@@ -104,10 +104,10 @@ class Config:
     # ============================================================
     batch_size: int = 128            
     batch_size_val: int = 128         
-    num_workers: int = 4              
+    num_workers: int = 0              
     
     # Data cleanup (barrier filtering)
-    min_barrier: float = 0.0
+    min_barrier: float = 0.1
     max_barrier: float = 5.0
     
     # Train/Val split
@@ -150,7 +150,7 @@ class Config:
     
     # Training loop
     epochs: int = 10000
-    patience: int = 120
+    patience: int = 50
     save_interval: int = 50
     final_model_patience: int = 200
     
@@ -235,7 +235,7 @@ class Config:
     al_n_query: int = 2500  # Number of query samples added to training set each cycle
     
     # Active Learning Loop
-    al_query_strategy: str = 'error_weighted'
+    al_query_strategy: str = 'mixed'  # ?? NEW: 'error_weighted' or 'mixed'
     al_max_cycles: int = 20
     al_seed: int = 42
     al_convergence_check: bool = True
@@ -243,6 +243,24 @@ class Config:
     al_convergence_threshold_mae: float = 0.01
     al_convergence_threshold_rel_mae: float = 0.1
     al_convergence_patience: int = 2000
+    
+    # ============================================================
+    # ACTIVE LEARNING - MIXED SAMPLING (NEW!)
+    # ============================================================
+    # Mixed sampling combines exploitation (high-error regions) 
+    # with exploration (random sampling) to avoid getting stuck on outliers
+    
+    al_mixed_exploitation_ratio: float = 0.5  # ?? Ratio of exploitation vs exploration
+    # - 0.0 = 100% random exploration (uniform sampling)
+    # - 0.5 = 50% high-error + 50% random (BALANCED)
+    # - 0.8 = 80% high-error + 20% random (aggressive exploitation)
+    # - 1.0 = 100% error-weighted (original strategy)
+    
+    al_error_cap_multiplier: float = 3.0  # ?? Cap errors at N × median_error
+    # Prevents single outliers from dominating sampling
+    # - 2.0 = conservative (cap at 2× median)
+    # - 3.0 = balanced (recommended)
+    # - 5.0 = aggressive (allow large errors)
     
     # ============================================================
     # LOGGING
@@ -357,5 +375,10 @@ if __name__ == "__main__":
     print(f"  Cycle 0: {config1.get_model_name(n_samples=5000, cycle=0)}")
     print(f"  Cycle 5: {config1.get_model_name(n_samples=10000, cycle=5)}")
     print(f"  Final:   {config1.get_model_name(n_samples=25000)}")
+    
+    print("\n?? NEW: Mixed Sampling Configuration:")
+    print(f"  Strategy: {config1.al_query_strategy}")
+    print(f"  Exploitation Ratio: {config1.al_mixed_exploitation_ratio}")
+    print(f"  Error Cap Multiplier: {config1.al_error_cap_multiplier}")
     
     print("\n" + "="*70)

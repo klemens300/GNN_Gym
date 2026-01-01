@@ -5,19 +5,14 @@ Handles:
 - Test composition generation
 - Oracle-based test data generation
 - Model predictions
-- Error-based query strategy
+- Error-based query strategy with MIXED SAMPLING
 - Convergence checking for Active Learning
 - GPU memory cleanup
 
-Usage:
-    from inference import run_inference_cycle
-    
-    selected_comps, predictions_df = run_inference_cycle(
-        cycle=0,
-        model_path='checkpoints/best_model.pt',
-        oracle=oracle,
-        config=config
-    )
+?? NEW: Mixed Sampling Strategy
+- Combines exploitation (high-error regions) with exploration (random)
+- Prevents getting stuck on outliers
+- Configurable exploitation/exploration ratio
 """
 
 import numpy as np
@@ -117,11 +112,6 @@ def generate_test_compositions(
     
     Returns:
         compositions: List of composition dicts {element: fraction}
-    
-    Example:
-        >>> comps = generate_test_compositions(['Mo', 'W'], n_test=10)
-        >>> print(comps[0])
-        {'Mo': 0.234, 'W': 0.766}
     """
     np.random.seed(seed)
     
@@ -165,13 +155,6 @@ def generate_test_data_with_oracle(
             - composition_string
             - structure_folder
             - backward_barrier_eV
-    
-    Example:
-        >>> test_data = generate_test_data_with_oracle(
-        ...     compositions=[{'Mo': 0.5, 'W': 0.5}],
-        ...     oracle=oracle,
-        ...     config=config
-        ... )
     """
     results = []
     
@@ -222,13 +205,6 @@ def predict_barriers_for_test_set(
             - predicted_barrier
             - absolute_error
             - relative_error
-    
-    Example:
-        >>> predictions = predict_barriers_for_test_set(
-        ...     'checkpoints/best_model.pt',
-        ...     test_data,
-        ...     config
-        ... )
     """
     # Load model
     model, checkpoint = load_model_for_inference(model_path, config)
@@ -248,7 +224,7 @@ def predict_barriers_for_test_set(
     for idx, row in iterator:
         structure_folder = Path(row['structure_folder'])
         
-        # ? FIX: Use correct column name from CSV
+        # Use correct column name from CSV
         oracle_barrier = row['backward_barrier_eV']
         
         # Make path absolute if needed
@@ -299,34 +275,189 @@ def predict_barriers_for_test_set(
 
 
 # ============================================================================
-# 4. QUERY STRATEGY (ERROR-WEIGHTED)
+# 4. QUERY STRATEGY - MIXED SAMPLING (NEW!)
 # ============================================================================
 
-def select_samples_by_error(
+def select_samples_mixed(
     predictions: pd.DataFrame,
-    n_query: int = 10,
-    strategy: str = 'error_weighted',
-    seed: int = 42
+    n_query: int,
+    exploitation_ratio: float = 0.5,
+    error_cap_multiplier: float = 3.0,
+    seed: int = 42,
+    logger: Optional[logging.Logger] = None
 ) -> List[dict]:
     """
-    Select samples for training based on prediction error.
+    ?? Mixed Sampling Strategy: Exploitation + Exploration
+    
+    Combines:
+    - Exploitation: Sample high-error regions (with capping to avoid outliers)
+    - Exploration: Random uniform sampling
+    
+    This prevents getting stuck on single outlier samples!
     
     Args:
         predictions: DataFrame with relative_error column
-        n_query: Number of samples to select
-        strategy: Selection strategy ('error_weighted')
+        n_query: Total number of samples to select
+        exploitation_ratio: Fraction for exploitation (0.0 to 1.0)
+            - 0.0 = 100% random (pure exploration)
+            - 0.5 = 50% high-error + 50% random (BALANCED)
+            - 1.0 = 100% error-weighted (pure exploitation)
+        error_cap_multiplier: Cap errors at N × median_error
+            - Prevents single outliers from dominating
         seed: Random seed
+        logger: Optional logger for diagnostics
     
     Returns:
         selected_samples: List of dicts with composition info
     
     Example:
-        >>> selected = select_samples_by_error(predictions, n_query=5)
-        >>> print(selected[0]['composition_str'])
+        >>> selected = select_samples_mixed(
+        ...     predictions, 
+        ...     n_query=100, 
+        ...     exploitation_ratio=0.5  # 50/50 split
+        ... )
     """
     np.random.seed(seed)
     
-    if strategy == 'error_weighted':
+    n_query = min(n_query, len(predictions))
+    
+    # Split budget
+    n_exploit = int(n_query * exploitation_ratio)
+    n_explore = n_query - n_exploit
+    
+    if logger:
+        logger.info(f"Mixed Sampling Strategy:")
+        logger.info(f"  Total queries: {n_query}")
+        logger.info(f"  Exploitation: {n_exploit} ({exploitation_ratio*100:.0f}%)")
+        logger.info(f"  Exploration: {n_explore} ({(1-exploitation_ratio)*100:.0f}%)")
+        logger.info(f"  Error cap: {error_cap_multiplier}× median")
+    
+    # ----------------------------------------------------------------
+    # 1. EXPLOITATION: Error-weighted sampling with capping
+    # ----------------------------------------------------------------
+    if n_exploit > 0:
+        rel_errors = predictions['relative_error'].values
+        median_error = np.median(rel_errors)
+        
+        # Cap errors to prevent outlier dominance
+        capped_errors = np.minimum(rel_errors, error_cap_multiplier * median_error)
+        
+        # Calculate weights
+        weights = capped_errors / capped_errors.sum()
+        
+        # Sample without replacement
+        exploit_indices = np.random.choice(
+            len(predictions),
+            size=n_exploit,
+            replace=False,
+            p=weights
+        )
+        
+        if logger:
+            # Count how many samples hit the cap
+            n_capped = (rel_errors > error_cap_multiplier * median_error).sum()
+            logger.info(f"  Capped {n_capped}/{len(predictions)} outliers (>{error_cap_multiplier}× median)")
+            
+            # Show error statistics
+            exploit_errors = rel_errors[exploit_indices]
+            logger.info(f"  Exploitation samples:")
+            logger.info(f"    Mean rel. error: {exploit_errors.mean():.3f}")
+            logger.info(f"    Max rel. error: {exploit_errors.max():.3f}")
+    else:
+        exploit_indices = np.array([], dtype=int)
+    
+    # ----------------------------------------------------------------
+    # 2. EXPLORATION: Uniform random sampling
+    # ----------------------------------------------------------------
+    if n_explore > 0:
+        # Sample from remaining indices
+        remaining_indices = list(set(range(len(predictions))) - set(exploit_indices))
+        
+        if len(remaining_indices) < n_explore:
+            # Not enough remaining - take all
+            explore_indices = np.array(remaining_indices)
+            if logger:
+                logger.warning(f"  Only {len(remaining_indices)} samples available for exploration")
+        else:
+            explore_indices = np.random.choice(
+                remaining_indices,
+                size=n_explore,
+                replace=False
+            )
+        
+        if logger:
+            rel_errors = predictions['relative_error'].values
+            explore_errors = rel_errors[explore_indices]
+            logger.info(f"  Exploration samples:")
+            logger.info(f"    Mean rel. error: {explore_errors.mean():.3f}")
+            logger.info(f"    Max rel. error: {explore_errors.max():.3f}")
+    else:
+        explore_indices = np.array([], dtype=int)
+    
+    # ----------------------------------------------------------------
+    # 3. COMBINE
+    # ----------------------------------------------------------------
+    selected_indices = np.concatenate([exploit_indices, explore_indices])
+    
+    # Convert to list of dicts
+    selected_samples = []
+    for idx in selected_indices:
+        row = predictions.iloc[idx]
+        selected_samples.append({
+            'composition_str': row['composition'],
+            'structure_folder': row['structure_folder'],
+            'oracle_barrier': row['oracle_barrier'],
+            'predicted_barrier': row['predicted_barrier'],
+            'relative_error': row['relative_error']
+        })
+    
+    return selected_samples
+
+
+def select_samples_by_error(
+    predictions: pd.DataFrame,
+    n_query: int = 10,
+    strategy: str = 'error_weighted',
+    seed: int = 42,
+    config: Optional[Config] = None,
+    logger: Optional[logging.Logger] = None
+) -> List[dict]:
+    """
+    Select samples for training based on prediction error.
+    
+    Supports two strategies:
+    - 'error_weighted': Pure error-weighted sampling
+    - 'mixed': Mixed exploitation/exploration (RECOMMENDED)
+    
+    Args:
+        predictions: DataFrame with relative_error column
+        n_query: Number of samples to select
+        strategy: Selection strategy ('error_weighted' or 'mixed')
+        seed: Random seed
+        config: Config object (for mixed sampling parameters)
+        logger: Optional logger
+    
+    Returns:
+        selected_samples: List of dicts with composition info
+    """
+    np.random.seed(seed)
+    
+    # ?? NEW: Mixed sampling
+    if strategy == 'mixed':
+        if config is None:
+            raise ValueError("Config required for mixed sampling strategy")
+        
+        return select_samples_mixed(
+            predictions=predictions,
+            n_query=n_query,
+            exploitation_ratio=config.al_mixed_exploitation_ratio,
+            error_cap_multiplier=config.al_error_cap_multiplier,
+            seed=seed,
+            logger=logger
+        )
+    
+    # Original error-weighted sampling
+    elif strategy == 'error_weighted':
         # Sample proportional to relative error
         weights = predictions['relative_error'].values
         weights = weights / weights.sum()
@@ -370,11 +501,6 @@ def parse_composition_string(comp_str: str) -> dict:
 
     Returns:
         composition: Dict {element: fraction}
-
-    Example:
-        >>> comp = parse_composition_string('Mo0.50W0.50')
-        >>> print(comp)
-        {'Mo': 0.50, 'W': 0.50}
     """
     import re
     pattern = r'([A-Z][a-z]?)(\d+\.\d+)'
@@ -412,13 +538,6 @@ def generate_query_compositions_from_selected(
 
     Returns:
         query_compositions: List of composition dicts
-
-    Example:
-        >>> query_comps = generate_query_compositions_from_selected(
-        ...     selected_samples=[{'composition_str': 'Mo0.50W0.50', ...}],
-        ...     n_query=100,
-        ...     elements=['Mo', 'W']
-        ... )
     """
     np.random.seed(seed)
 
@@ -510,14 +629,6 @@ def generate_and_calculate_query_data(
 
     Returns:
         n_successful: Number of successfully calculated query samples
-
-    Example:
-        >>> n_added = generate_and_calculate_query_data(
-        ...     selected_samples=selected,
-        ...     oracle=oracle,
-        ...     config=config
-        ... )
-        >>> print(f"Added {n_added} query samples to CSV")
     """
     elements = list(config.elements)
     n_query = config.al_n_query
@@ -671,7 +782,7 @@ def run_inference_cycle(
     1. Generate test compositions
     2. Calculate barriers with Oracle
     3. Predict with model
-    4. Select high-error samples for training
+    4. Select high-error samples for training (with MIXED SAMPLING!)
     5. Check convergence (optional)
     
     Args:
@@ -685,16 +796,6 @@ def run_inference_cycle(
     Returns:
         selected_samples: List of selected samples for next training
         predictions: Full predictions DataFrame
-    
-    Example:
-        >>> tracker = ConvergenceTracker(config)
-        >>> selected, preds = run_inference_cycle(
-        ...     cycle=0,
-        ...     model_path='checkpoints/cycle_0/best_model.pt',
-        ...     oracle=oracle,
-        ...     config=config,
-        ...     convergence_tracker=tracker
-        ... )
     """
     logger = setup_inference_logger(cycle, config)
     
@@ -755,13 +856,21 @@ def run_inference_cycle(
         logger.info(f"  Cycles without improvement: {convergence_tracker.cycles_without_improvement}")
         logger.info(f"  Converged: {converged}")
     
-    # 5. Select samples for training
-    logger.info(f"\nStep 4: Selecting {config.al_n_query} samples for training")
+    # 5. Select samples for training with MIXED SAMPLING
+    logger.info(f"\n?? Step 4: Selecting {config.al_n_query} samples (MIXED SAMPLING)")
+    logger.info(f"  Strategy: {config.al_query_strategy}")
+    
+    if config.al_query_strategy == 'mixed':
+        logger.info(f"  Exploitation ratio: {config.al_mixed_exploitation_ratio}")
+        logger.info(f"  Error cap: {config.al_error_cap_multiplier}× median")
+    
     selected_samples = select_samples_by_error(
         predictions=predictions,
         n_query=config.al_n_query,
         strategy=config.al_query_strategy,
-        seed=config.al_seed + cycle
+        seed=config.al_seed + cycle,
+        config=config,
+        logger=logger
     )
     logger.info(f"  Selected {len(selected_samples)} samples")
     
@@ -794,14 +903,19 @@ def run_inference_cycle(
 
 if __name__ == "__main__":
     print("="*70)
-    print("INFERENCE MODULE")
+    print("INFERENCE MODULE WITH MIXED SAMPLING")
     print("="*70)
+    
+    print("\n?? NEW: Mixed Sampling Strategy")
+    print("  - Combines exploitation + exploration")
+    print("  - Prevents outlier dominance")
+    print("  - Configurable ratio (default: 50/50)")
     
     print("\nFeatures:")
     print("  1. Test composition generation")
     print("  2. Oracle-based test data generation")
     print("  3. Model predictions")
-    print("  4. Error-weighted query strategy")
+    print("  4. ?? Mixed error-weighted + random sampling")
     print("  5. Convergence checking")
     print("  6. Complete inference cycle")
     

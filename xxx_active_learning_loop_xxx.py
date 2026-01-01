@@ -366,6 +366,8 @@ def active_learning_loop(config: Config, logger: logging.Logger):
                     break
                 logger.info(f"? Training complete: val MAE = {train_result['best_val_mae']:.4f} eV")
         
+        
+
         # ========== INFERENCE ON FIXED TEST SET (NO ORACLE CALLS!) ==========
         if config.train_only_skip_cycles:
             logger.info("Skipping inference")
@@ -402,15 +404,23 @@ def active_learning_loop(config: Config, logger: logging.Logger):
                     if converged:
                         logger.info(f"? CONVERGED! (no improvement for {config.al_convergence_patience} cycles)")
                 
-                # Select high-error samples for query
+                # ?? Select high-error samples for query (PASS CONFIG!)
                 selected = select_samples_by_error(
                     predictions=predictions,
                     n_query=config.al_n_query,
-                    strategy=config.al_query_strategy,
-                    seed=config.al_seed + cycle
+                    strategy=config.al_query_strategy,  # ?? Uses 'mixed' from config
+                    seed=config.al_seed + cycle,
+                    config=config,  # ?? WICHTIG: Config durchreichen!
+                    logger=logger   # ?? Logger für Diagnostics
                 )
                 
                 logger.info(f"? Selected {len(selected)} high-error test samples")
+                
+                # Show strategy info
+                if config.al_query_strategy == 'mixed':
+                    n_exploit = int(config.al_n_query * config.al_mixed_exploitation_ratio)
+                    n_explore = config.al_n_query - n_exploit
+                    logger.info(f"  ?? Mixed Sampling: {n_exploit} exploitation + {n_explore} exploration")
                 
                 # Show top errors
                 logger.info(f"  Top 5 errors:")
