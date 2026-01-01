@@ -48,11 +48,9 @@ def setup_simple_logger(config: Config):
     logger = logging.getLogger("active_learning")
     logger.setLevel(logging.INFO)
     
-    # Close and remove ALL existing handlers
-    for handler in list(logger.handlers):
-        handler.close()
-        logger.removeHandler(handler)
-    logger.handlers = []
+    # ?? FIX: Only remove handlers for THIS logger
+    if logger.handlers:
+        logger.handlers = []
     
     # File handler
     log_file = Path(config.log_dir) / "active_learning.log"

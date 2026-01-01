@@ -401,6 +401,12 @@ class Trainer:
                 self.scaler.scale(loss).backward()
             else:
                 loss.backward()
+                
+                # ?? EMERGENCY: Check for NaN in loss
+                if torch.isnan(loss) or torch.isinf(loss):
+                    self.logger.error(f"? NaN/Inf in loss! Stopping.")
+                    raise RuntimeError("Training diverged: NaN/Inf in loss")
+                
             
             # 🔥 DIAGNOSTICS: Gradient monitoring (first batch only)
             if batch_idx == 0 and self.use_wandb:
