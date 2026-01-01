@@ -112,7 +112,7 @@ class Config:
     
     # Train/Val split
     val_split: float = 0.2
-    random_seed: int = 41
+    random_seed: int = 666
     
     # ============================================================
     # ATOM EMBEDDINGS
@@ -138,15 +138,15 @@ class Config:
 
     # MLP Predictor
     mlp_hidden_dims: List[int] = field(default_factory=lambda: [512, 256, 128])
-    dropout: float = 0.2
+    dropout: float = 0.1
     
     # ============================================================
     # TRAINING
     # ============================================================
     # Optimization
-    learning_rate: float = 1-5     
+    learning_rate: float = 1e-4
     weight_decay: float = 0.03
-    gradient_clip_norm: float = 10.0  # ?? FIXED: Increased from 0.5
+    gradient_clip_norm: float = 1.0  
     
     # Training loop
     epochs: int = 10000
@@ -202,8 +202,8 @@ class Config:
     # CosineAnnealingWarmRestarts parameters
     warm_restart_t_0: int = 500
     warm_restart_t_mult: float = 1.2
-    warm_restart_eta_min: float = 1e-5 
-    warm_restart_decay: float = 1.0  # ?? FIXED: No decay for stability
+    warm_restart_eta_min: float = 1e-4
+    warm_restart_decay: float = 1.0  
     
     # ============================================================
     # NEB PARAMETERS
