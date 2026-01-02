@@ -32,7 +32,7 @@ try:
     SKLEARN_AVAILABLE = True
 except ImportError:
     SKLEARN_AVAILABLE = False
-    print("⚠️  sklearn not available - R² score will not be computed")
+    print("??  sklearn not available - R² score will not be computed")
 
 
 def setup_logger(name: str, log_file: Path, level: str = "INFO", also_console: bool = True):
@@ -219,41 +219,41 @@ class Trainer:
             also_console=config.log_to_console
         )
         
-        # 🔥 NOW we can use logger for optimizations!
+        # ?? NOW we can use logger for optimizations!
         
-        # 🔥 cuDNN Optimization
+        # ?? cuDNN Optimization
         if getattr(config, 'cudnn_benchmark', False) and torch.cuda.is_available():
             import torch.backends.cudnn as cudnn
             cudnn.benchmark = True
-            self.logger.info("✓ cuDNN benchmark enabled")
+            self.logger.info("? cuDNN benchmark enabled")
         
-        # 🔥 Model Compilation (PyTorch 2.0+)
+        # ?? Model Compilation (PyTorch 2.0+)
         if getattr(config, 'compile_model', False) and hasattr(torch, 'compile'):
             compile_mode = getattr(config, 'compile_mode', 'default')
-            self.logger.info(f"🔥 Compiling model (mode={compile_mode})...")
+            self.logger.info(f"?? Compiling model (mode={compile_mode})...")
             self.model = torch.compile(self.model, mode=compile_mode)
-            self.logger.info("✓ Model compiled!")
+            self.logger.info("? Model compiled!")
         
         # Loss function
         self.criterion = self._get_loss_function()
         
-        # 🔥 Optimizer (with optional fused mode for speed)
+        # ?? Optimizer (with optional fused mode for speed)
         use_fused = getattr(config, 'use_fused_optimizer', False) and torch.cuda.is_available()
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(),
             lr=config.learning_rate,
             weight_decay=config.weight_decay,
-            fused=use_fused  # 🔥 GPU-optimized if available
+            fused=use_fused  # ?? GPU-optimized if available
         )
         if use_fused:
-            self.logger.info("✓ Using fused AdamW optimizer")
+            self.logger.info("? Using fused AdamW optimizer")
         
-        # 🔥 Mixed Precision (AMP)
+        # ?? Mixed Precision (AMP)
         self.use_amp = getattr(config, 'use_amp', False) and torch.cuda.is_available()
         if self.use_amp:
             from torch.cuda.amp import autocast, GradScaler
             self.scaler = GradScaler()
-            self.logger.info("✓ Mixed Precision (AMP) enabled")
+            self.logger.info("? Mixed Precision (AMP) enabled")
         else:
             self.scaler = None
         
@@ -382,7 +382,7 @@ class Trainer:
             final_batch = final_batch.to(self.device)
             barriers = barriers.to(self.device).unsqueeze(1)
             
-            # 🔥 Mixed Precision Forward Pass
+            # ?? Mixed Precision Forward Pass
             if self.use_amp:
                 from torch.cuda.amp import autocast
                 with autocast():
@@ -396,7 +396,7 @@ class Trainer:
             # Backward pass
             self.optimizer.zero_grad()
             
-            # 🔥 Mixed Precision Backward
+            # ?? Mixed Precision Backward
             if self.use_amp:
                 self.scaler.scale(loss).backward()
             else:
@@ -408,7 +408,7 @@ class Trainer:
                     raise RuntimeError("Training diverged: NaN/Inf in loss")
                 
             
-            # 🔥 DIAGNOSTICS: Gradient monitoring (first batch only)
+            # ?? DIAGNOSTICS: Gradient monitoring (first batch only)
             if batch_idx == 0 and self.use_wandb:
                 total_norm = 0
                 max_norm = 0
@@ -431,9 +431,9 @@ class Trainer:
                 
                 # Warnings
                 if total_norm < 1e-5:
-                    self.logger.warning(f"⚠️  Gradients vanishing! Norm = {total_norm:.2e}")
+                    self.logger.warning(f"??  Gradients vanishing! Norm = {total_norm:.2e}")
                 elif total_norm > 100:
-                    self.logger.warning(f"⚠️  Gradients exploding! Norm = {total_norm:.2e}")
+                    self.logger.warning(f"??  Gradients exploding! Norm = {total_norm:.2e}")
             
             # Gradient clipping
             if self.config.gradient_clip_norm > 0:
@@ -444,7 +444,7 @@ class Trainer:
                     self.config.gradient_clip_norm
                 )
             
-            # 🔥 Mixed Precision Optimizer Step
+            # ?? Mixed Precision Optimizer Step
             if self.use_amp:
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
@@ -471,7 +471,7 @@ class Trainer:
         """
         Validate model with comprehensive diagnostics.
         
-        🔥 ENHANCED: Includes R², prediction variance, scatter plots
+        ?? ENHANCED: Includes R², prediction variance, scatter plots
         """
         self.model.eval()
         total_loss = 0
@@ -479,7 +479,7 @@ class Trainer:
         total_rel_mae = 0
         n_batches = 0
         
-        # 🔥 Collect all predictions and labels for diagnostics
+        # ?? Collect all predictions and labels for diagnostics
         all_preds = []
         all_labels = []
         
@@ -503,7 +503,7 @@ class Trainer:
                 total_rel_mae += rel_mae.item()
                 n_batches += 1
                 
-                # 🔥 Collect for diagnostics
+                # ?? Collect for diagnostics
                 all_preds.extend(predictions.cpu().numpy().flatten())
                 all_labels.extend(barriers.cpu().numpy().flatten())
         
@@ -512,7 +512,7 @@ class Trainer:
         avg_rel_mae = total_rel_mae / n_batches
         
         # ====================================================================
-        # 🔥 DIAGNOSTICS - Run every 10 epochs
+        # ?? DIAGNOSTICS - Run every 10 epochs
         # ====================================================================
         if self.use_wandb and self.current_epoch % 10 == 0:
             self._log_diagnostics(all_preds, all_labels)
@@ -618,17 +618,18 @@ class Trainer:
         }
         
         # Add scatter plot (sample 1000 points to avoid huge plots)
-        sample_size = min(1000, len(pred_array))
-        indices = np.random.choice(len(pred_array), sample_size, replace=False)
-        
-        log_dict["diagnostics/prediction_scatter"] = wandb.plot.scatter(
-            wandb.Table(
-                data=[[label_array[i], pred_array[i]] for i in indices],
-                columns=["True", "Predicted"]
-            ),
-            "True", "Predicted",
-            title=f"Predictions vs True (Epoch {self.current_epoch}, R²={r2:.3f})"
-        )
+        # [DISABLED - CAUSES WANDB TO HANG]
+        # sample_size = min(1000, len(pred_array))
+        # indices = np.random.choice(len(pred_array), sample_size, replace=False)
+        # 
+        # log_dict["diagnostics/prediction_scatter"] = wandb.plot.scatter(
+        #     wandb.Table(
+        #         data=[[label_array[i], pred_array[i]] for i in indices],
+        #         columns=["True", "Predicted"]
+        #     ),
+        #     "True", "Predicted",
+        #     title=f"Predictions vs True (Epoch {self.current_epoch}, R²={r2:.3f})"
+        # )
         
         wandb.log(log_dict)
         
@@ -636,7 +637,7 @@ class Trainer:
         # 8. Log warnings
         # ----------------------------------------------------------------
         if is_stuck:
-            warning_msg = f"⚠️  MODEL STUCK AT MEAN! Reasons: {', '.join(stuck_reasons)}"
+            warning_msg = f"??  MODEL STUCK AT MEAN! Reasons: {', '.join(stuck_reasons)}"
             self.logger.warning(warning_msg)
             
             # Alert in wandb
@@ -648,24 +649,24 @@ class Trainer:
                 )
         else:
             self.logger.info(
-                f"✅ Model learning! R²={r2:.4f}, Pred_Std={pred_std:.4f}"
+                f"? Model learning! R²={r2:.4f}, Pred_Std={pred_std:.4f}"
             )
         
         # ----------------------------------------------------------------
         # 9. Print diagnostic summary
         # ----------------------------------------------------------------
         print("\n" + "="*70)
-        print(f"📊 DIAGNOSTICS (Epoch {self.current_epoch})")
+        print(f"?? DIAGNOSTICS (Epoch {self.current_epoch})")
         print("="*70)
-        print(f"R² Score:           {r2:.4f}  {'❌ STUCK!' if r2 < 0.05 else '✅'}")
+        print(f"R² Score:           {r2:.4f}  {'? STUCK!' if r2 < 0.05 else '?'}")
         print(f"Pred Mean:          {pred_mean:.4f}  (Dataset: {dataset_mean:.4f})")
-        print(f"Pred Std Dev:       {pred_std:.4f}  {'❌ Too low!' if pred_std < 0.01 else '✅'}")
+        print(f"Pred Std Dev:       {pred_std:.4f}  {'? Too low!' if pred_std < 0.01 else '?'}")
         print(f"Pred Range:         [{pred_min:.4f}, {pred_max:.4f}]")
-        print(f"Mean Deviation:     {mean_dev_avg:.4f}  {'❌ Too low!' if mean_dev_avg < 0.02 else '✅'}")
+        print(f"Mean Deviation:     {mean_dev_avg:.4f}  {'? Too low!' if mean_dev_avg < 0.02 else '?'}")
         print(f"Residuals Std:      {residuals_std:.4f}")
         
         if is_stuck:
-            print(f"\n⚠️  WARNING: Model appears stuck at mean!")
+            print(f"\n??  WARNING: Model appears stuck at mean!")
             print(f"   Consider: Increase learning rate or reduce batch size")
         
         print("="*70 + "\n")
@@ -715,7 +716,7 @@ class Trainer:
         """
         Main training loop.
         
-        🔥 ENHANCED: With diagnostics every 10 epochs
+        ?? ENHANCED: With diagnostics every 10 epochs
         """
         self.logger.info("="*70)
         self.logger.info("TRAINING START")
@@ -803,7 +804,7 @@ class Trainer:
                 self.save_checkpoint(str(checkpoint_path), is_best=True)
                 
                 if verbose:
-                    self.logger.info(f"  ✓ New best model! Val loss: {val_loss:.4f}")
+                    self.logger.info(f"  ? New best model! Val loss: {val_loss:.4f}")
             else:
                 self.patience_counter += 1
                 
@@ -871,25 +872,25 @@ if __name__ == "__main__":
     print("TRAINER MODULE (WITH DIAGNOSTICS)")
     print("="*70)
     
-    print("\n🔥 ENHANCED FEATURES:")
-    print("  ✅ R² Score tracking")
-    print("  ✅ Prediction variance monitoring")
-    print("  ✅ Mean prediction detection")
-    print("  ✅ Gradient norm tracking")
-    print("  ✅ Scatter plots & histograms")
-    print("  ✅ Automatic stuck detection")
+    print("\n?? ENHANCED FEATURES:")
+    print("  ? R² Score tracking")
+    print("  ? Prediction variance monitoring")
+    print("  ? Mean prediction detection")
+    print("  ? Gradient norm tracking")
+    print("  ? Scatter plots & histograms")
+    print("  ? Automatic stuck detection")
     
-    print("\n📊 DIAGNOSTIC METRICS:")
+    print("\n?? DIAGNOSTIC METRICS:")
     print("  - diagnostics/r2_score")
     print("  - diagnostics/pred_std")
     print("  - diagnostics/mean_deviation_avg")
     print("  - diagnostics/gradient_norm_total")
-    print("  - diagnostics/prediction_scatter")
+    # print("  - diagnostics/prediction_scatter")  # [DISABLED - CAUSES WANDB TO HANG]
     print("  - diagnostics/is_stuck (0 or 1)")
     
-    print("\n⚠️  ALERTS:")
-    print("  - R² < 0.05 → Model stuck at mean!")
-    print("  - Pred_Std < 0.01 → All predictions identical!")
-    print("  - Gradient_Norm < 1e-5 → Gradients vanishing!")
+    print("\n??  ALERTS:")
+    print("  - R² < 0.05 ? Model stuck at mean!")
+    print("  - Pred_Std < 0.01 ? All predictions identical!")
+    print("  - Gradient_Norm < 1e-5 ? Gradients vanishing!")
     
     print("\n" + "="*70)
