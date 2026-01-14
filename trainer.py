@@ -141,7 +141,7 @@ class Trainer:
     
     Includes:
     - Weighted Loss (KMC Strategy)
-    - Comprehensive diagnostics (R², Stuck Detection)
+    - Comprehensive diagnostics (R² Score, Stuck Detection)
     - Gradient monitoring
     """
     
@@ -269,8 +269,8 @@ class Trainer:
                 self.optimizer,
                 mode='min',
                 factor=self.config.plateau_factor,
-                patience=self.config.plateau_patience,
-                verbose=True
+                patience=self.config.plateau_patience
+                # verbose=True REMOVED: Deprecated in newer PyTorch versions
             )
         elif scheduler_type == "cosine":
             return torch.optim.lr_scheduler.CosineAnnealingLR(

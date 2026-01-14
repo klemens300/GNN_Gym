@@ -12,7 +12,8 @@ import torch
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from torch.utils.data import Dataset
+# --- FIX: Import Subset and DataLoader ---
+from torch.utils.data import Dataset, DataLoader, Subset
 from graph_builder import GraphBuilder
 
 class DiffusionBarrierDataset(Dataset):
@@ -158,6 +159,8 @@ class DiffusionBarrierDataset(Dataset):
         # Shape is [1, 1], so it's fine.
 
         return initial_graph, final_graph, barrier, progress
+
+
 def create_dataloaders(config, csv_path):
     """
     Create train and validation dataloaders.
@@ -193,6 +196,7 @@ def create_dataloaders(config, csv_path):
     # 3. Create Subsets
     # This ensures train_loader gets data from the 'trajectory sampling' dataset
     # and val_loader gets data from the 'standard' dataset, consistent with the indices.
+    # --- NOW WORKS BECAUSE Subset IS IMPORTED ---
     train_subset = Subset(train_dataset_full, train_indices)
     val_subset = Subset(val_dataset_full, val_indices)
     

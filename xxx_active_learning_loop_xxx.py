@@ -138,14 +138,25 @@ def train_cycle_model(config: Config, cycle: int, logger: logging.Logger, is_fin
         db_stats = get_database_stats(config.csv_path)
         config._current_dataset_size = db_stats['n_samples']
         
-        result = create_dataloaders(config)
+        # --- FIX: Pass csv_path explicitly ---
+        result = create_dataloaders(config, config.csv_path)
         train_loader, val_loader = result if isinstance(result, tuple) else (result, None)
         
         builder = GraphBuilder(config)
         node_input_dim = get_node_input_dim(builder)
         model = create_model_from_config(config, node_input_dim)
         
-        # Load best model from previous cycle
+        # Load best model from previous cycle (Transfer Learning)
+        if not is_final and cycle > 0:
+            # Try to load best model from previous cycle
+            prev_cycle = cycle - 1
+            prev_path = Path(config.checkpoint_dir) / f"cycle_{prev_cycle}" / "best_model.pt"
+            if prev_path.exists():
+                logger.info(f"Transfer Learning: Loading model from cycle {prev_cycle}")
+                checkpoint = torch.load(prev_path, map_location='cpu')
+                model.load_state_dict(checkpoint['model_state_dict'])
+        
+        # Load best model from ANY previous cycle for final training
         if is_final:
             best_val_mae = float('inf')
             best_cycle = None
@@ -165,7 +176,8 @@ def train_cycle_model(config: Config, cycle: int, logger: logging.Logger, is_fin
                 model.load_state_dict(checkpoint['model_state_dict'])
         
         trainer = Trainer(model, config, save_dir=str(outdir), cycle=cycle, is_final_model=is_final)
-        # Clean trainer logs (remove stream handlers to avoid double logging)
+        
+        # Clean trainer logs (remove stream handlers to avoid double logging in console)
         trainer.logger.handlers = [h for h in trainer.logger.handlers if not isinstance(h, logging.StreamHandler)]
         
         trainer.train(train_loader, val_loader, verbose=False)

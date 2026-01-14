@@ -1,6 +1,7 @@
 """
 Module for generating and managing the fixed test set.
 CLEAN VERSION: No tqdm, robust logging, compatible with updated Oracle.
+FIXED: Uses paths from config.py instead of hardcoded paths.
 """
 
 import os
@@ -40,8 +41,12 @@ def generate_uniform_compositions(
     return compositions
 
 def load_test_set(config: Config) -> pd.DataFrame:
-    """Load the fixed test set dataframe."""
-    test_csv = Path(config.database_dir) / "fixed_test_set" / "test_set.csv"
+    """
+    Load the fixed test set dataframe.
+    Uses path defined in config.al_test_set_csv.
+    """
+    # FIXED: Use config path instead of hardcoded subfolder
+    test_csv = Path(config.al_test_set_csv)
     
     if not test_csv.exists():
         raise FileNotFoundError(
@@ -56,16 +61,17 @@ def create_fixed_test_set(config: Config, logger: logging.Logger):
     Generates a fixed test set if it doesn't exist yet.
     Uses the Oracle to calculate barriers for random compositions.
     """
-    # Define test set paths
-    test_dir = Path(config.database_dir) / "fixed_test_set"
-    test_csv = test_dir / "test_set.csv"
+    # FIXED: Use paths from config
+    test_csv = Path(config.al_test_set_csv)
+    test_dir = Path(config.al_test_set_dir)
     
     # 1. Check if test set already exists
     if test_csv.exists():
         try:
             df = pd.read_csv(test_csv)
             if len(df) >= config.al_test_set_size:
-                logger.info(f"Fixed test set already exists ({len(df)} samples). Skipping generation.")
+                logger.info(f"Fixed test set already exists ({len(df)} samples).")
+                logger.info(f"  Location: {test_csv}")
                 return
             else:
                 logger.warning(f"Existing test set is too small ({len(df)} < {config.al_test_set_size}). Extending...")
@@ -75,6 +81,8 @@ def create_fixed_test_set(config: Config, logger: logging.Logger):
     logger.info("="*70)
     logger.info("CREATING FIXED TEST SET")
     logger.info("="*70)
+    logger.info(f"  Target CSV: {test_csv}")
+    logger.info(f"  Target Dir: {test_dir}")
     
     test_dir.mkdir(parents=True, exist_ok=True)
     
