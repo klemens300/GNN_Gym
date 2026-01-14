@@ -23,8 +23,9 @@ class Config:
     # BASE DIRECTORIES
     # Only these need to be changed for different file systems
     # ============================================================
-    base_database_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN/databases"
-    base_production_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN/production"
+    base_database_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN_unrelaxed/databases"
+    base_production_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN_unrelaxed/MoNbTaW"
+    
     
     # ============================================================
     # AUTO-GENERATED PATHS (do not modify directly)
@@ -185,7 +186,7 @@ class Config:
     # LEARNING RATE SCHEDULER
     # ============================================================
     use_scheduler: bool = True
-    scheduler_type: str = "cosine_warm_restarts"
+    scheduler_type: str = "plateau"
     
     # ReduceLROnPlateau parameters
     plateau_factor: float = 0.5

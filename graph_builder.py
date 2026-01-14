@@ -6,6 +6,7 @@ Builds PyG graphs from CIF files with:
 - Atomic properties as separate features
 - Real geometry from structure files
 - Optimized with NPZ loading and ASE NeighborList
+- NEW: Reads relaxation progress for weighted loss training
 """
 
 import numpy as np
@@ -15,7 +16,7 @@ from ase import Atoms
 from ase.io import read as ase_read
 from ase.neighborlist import NeighborList
 from pathlib import Path
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, List, Optional
 import warnings
 import time
 
@@ -67,7 +68,7 @@ class GraphBuilder:
         self.element_to_idx = {el: idx for idx, el in enumerate(self.elements)}
         
         print("\n" + "="*70)
-        print("GRAPH BUILDER INITIALIZED (ATOM EMBEDDINGS)")
+        print("GRAPH BUILDER INITIALIZED (ATOM EMBEDDINGS + PROGRESS)")
         print("="*70)
         print(f"Elements: {self.elements}")
         print(f"Element indices: {self.element_to_idx}")
@@ -128,12 +129,7 @@ class GraphBuilder:
     def _read_structure_from_npz(self, npz_path: str) -> Atoms:
         """
         Read structure from NPZ file (fast).
-        
-        NPZ files are created by Oracle and contain:
-        - positions: atomic positions
-        - numbers: atomic numbers
-        - cell: unit cell
-        - pbc: periodic boundary conditions
+        NEW: Also extracts 'progress' scalar if available.
         """
         data = np.load(npz_path)
         atoms = Atoms(
@@ -142,18 +138,19 @@ class GraphBuilder:
             cell=data['cell'],
             pbc=data['pbc']
         )
+        
+        # NEW: Extract progress metadata and store in atoms.info
+        if 'progress' in data:
+            atoms.info['relax_progress'] = float(data['progress'][0])
+        else:
+            # Default to 1.0 (fully relaxed) if not present (legacy files)
+            atoms.info['relax_progress'] = 1.0
+            
         return atoms
     
     def _read_structure_from_file(self, file_path: str) -> Atoms:
         """
         Read structure with NPZ fallback and optional caching.
-        
-        Priority:
-        1. RAM cache (if enabled)
-        2. NPZ file (if exists)
-        3. CIF file (fallback)
-        
-        Automatically creates NPZ if it doesn't exist.
         """
         # Check RAM cache
         if self.use_cache and file_path in self._structure_cache:
@@ -176,6 +173,9 @@ class GraphBuilder:
         # Fallback to CIF
         atoms = ase_read(file_path)
         
+        # Set default progress for CIF files (assumed standard/relaxed)
+        atoms.info['relax_progress'] = 1.0
+        
         # Create NPZ for next time
         try:
             self._save_structure_as_npz(atoms, str(npz_path))
@@ -190,12 +190,16 @@ class GraphBuilder:
 
     def _save_structure_as_npz(self, atoms: Atoms, npz_path: str):
         """Save ASE atoms as NPZ for faster loading."""
+        # Check if progress info exists, default to 1.0
+        progress = atoms.info.get('relax_progress', 1.0)
+        
         np.savez_compressed(
             npz_path,
             positions=atoms.positions,
             numbers=atoms.numbers,
             cell=atoms.cell.array,
-            pbc=atoms.pbc
+            pbc=atoms.pbc,
+            progress=np.array([progress], dtype=np.float32) # Save progress
         )
     
     def _compute_edges_from_positions(
@@ -205,13 +209,6 @@ class GraphBuilder:
     ) -> Tuple[torch.LongTensor, torch.FloatTensor, torch.FloatTensor]:
         """
         Compute edges with real distances using ASE NeighborList.
-        
-        Uses efficient C backend for neighbor search with PBC support.
-        
-        Returns:
-            edge_index: Edge connectivity [2, n_edges]
-            edge_attr: Edge distances [n_edges, 1]
-            edge_vectors: Edge direction vectors [n_edges, 3] (for line graph)
         """
         n_atoms = len(atoms)
         
@@ -287,13 +284,6 @@ class GraphBuilder:
     ) -> Dict:
         """
         Build line graph from edge vectors with vectorized computation.
-        
-        Line graph represents angular relationships:
-        - Nodes = bonds (edges of atom graph)
-        - Edges = pairs of bonds sharing an atom
-        - Edge features = angles between bonds
-        
-        Node features = normalized bond vector + bond length
         """
         n_edges = edge_index.shape[1]
         
@@ -372,7 +362,8 @@ class GraphBuilder:
     def cif_to_graph(
         self,
         cif_path: str,
-        backward_barrier: float = None
+        backward_barrier: float = None,
+        progress_override: Optional[float] = None  # NEW: Allow overriding progress
     ) -> Data:
         """
         Build PyG graph from CIF file with atom embeddings.
@@ -382,10 +373,12 @@ class GraphBuilder:
         - x_props: Atomic properties (optional)
         - edge_index, edge_attr: Connectivity and distances
         - line_graph_*: Line graph data (optional)
+        - relax_progress: NEW - Progress scalar [1, 1]
         
         Args:
             cif_path: Path to CIF file
             backward_barrier: Target barrier value (optional)
+            progress_override: Force progress value (0.0 to 1.0)
         
         Returns:
             PyG Data object with graph representation
@@ -395,9 +388,15 @@ class GraphBuilder:
             t_total = time.time()
             t0 = time.time()
         
-        # Read structure
+        # Read structure (this now also fetches progress info into atoms.info)
         atoms = self._read_structure_from_file(cif_path)
         
+        # --- NEW: PROGRESS HANDLING ---
+        if progress_override is not None:
+            progress = float(progress_override)
+        else:
+            progress = atoms.info.get('relax_progress', 1.0) # Default to 1.0 if missing
+            
         if self.profile:
             t_read = time.time() - t0
             t0 = time.time()
@@ -482,7 +481,8 @@ class GraphBuilder:
             x_element=x_element,     # Element indices for embeddings
             edge_index=edge_index,
             edge_attr=edge_attr,
-            num_nodes=n_atoms
+            num_nodes=n_atoms,
+            relax_progress=torch.tensor([[progress]], dtype=torch.float32) # NEW: Add progress scalar
         )
         
         # Add atomic properties if enabled
@@ -506,21 +506,15 @@ class GraphBuilder:
         self,
         initial_cif: str,
         final_cif: str,
-        backward_barrier: float = None
+        backward_barrier: float = None,
+        progress_initial: float = None, # NEW
+        progress_final: float = None    # NEW
     ) -> Tuple[Data, Data]:
         """
         Build graph pair from initial and final structures.
-        
-        Args:
-            initial_cif: Path to initial structure
-            final_cif: Path to final structure
-            backward_barrier: Barrier value (optional)
-        
-        Returns:
-            Tuple of (initial_graph, final_graph)
         """
-        initial_graph = self.cif_to_graph(initial_cif, backward_barrier)
-        final_graph = self.cif_to_graph(final_cif, backward_barrier)
+        initial_graph = self.cif_to_graph(initial_cif, backward_barrier, progress_override=progress_initial)
+        final_graph = self.cif_to_graph(final_cif, backward_barrier, progress_override=progress_final)
         
         return initial_graph, final_graph
     
@@ -565,16 +559,18 @@ def test_graph_builder():
     if not structure_folder.is_absolute():
         structure_folder = Path(csv_path).parent / structure_folder
     
-    test_cif = structure_folder / "initial_relaxed.cif"
+    # Try to find one of our NEW trajectory files to test progress reading
+    traj_file = structure_folder / "initial_traj_0.npz"
+    if traj_file.exists():
+        test_file = traj_file
+        print(f"Testing with TRAJECTORY file (should have progress=0.0): {test_file}")
+    else:
+        test_file = structure_folder / "initial_relaxed.cif"
+        print(f"Testing with STANDARD file (should have progress=1.0): {test_file}")
     
-    if not test_cif.exists():
-        print(f"\nTest CIF not found: {test_cif}")
-        print("="*70 + "\n")
+    if not test_file.exists():
+        print(f"\nTest file not found: {test_file}")
         return
-    
-    print(f"\nFound test CIF: {test_cif}")
-    print(f"From CSV: {csv_path}")
-    print(f"Total samples in DB: {len(df)}")
     
     # Create builder with profiling
     builder = GraphBuilder(config, csv_path=csv_path, profile=True, use_cache=True)
@@ -583,29 +579,23 @@ def test_graph_builder():
     print("Single graph build:")
     print("-"*70)
     
-    graph = builder.cif_to_graph(str(test_cif), backward_barrier=1.5)
+    graph = builder.cif_to_graph(str(test_file), backward_barrier=1.5)
     
     print("\n" + "-"*70)
     print("Graph statistics:")
     print("-"*70)
     print(f"  Nodes: {graph.num_nodes}")
     print(f"  Edges: {graph.edge_index.shape[1]}")
+    # Verify Progress Feature
+    if hasattr(graph, 'relax_progress'):
+        print(f"  Relax Progress: {graph.relax_progress.item():.2f}")
+    else:
+        print("  Relax Progress: MISSING!")
+        
     print(f"  Element indices: {graph.x_element.shape}")
-    print(f"    Unique elements: {torch.unique(graph.x_element).tolist()}")
-    
-    if hasattr(graph, 'x_props'):
-        print(f"  Atomic properties: {graph.x_props.shape}")
-    
-    print(f"  Edge features: {graph.edge_attr.shape}")
     
     if hasattr(graph, 'line_graph_x'):
         print(f"  Line graph nodes: {graph.line_graph_x.shape[0]}")
-        print(f"  Line graph edges: {graph.line_graph_edge_index.shape[1]}")
-    
-    print(f"\n  Edge distances (Å):")
-    print(f"    Min: {graph.edge_attr.min().item():.3f}")
-    print(f"    Max: {graph.edge_attr.max().item():.3f}")
-    print(f"    Mean: {graph.edge_attr.mean().item():.3f}")
     
     print("\nGraph builder test successful!")
     print("="*70 + "\n")

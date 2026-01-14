@@ -6,13 +6,14 @@ Architecture:
 2. Atom Graph Encoder (GNN)
 3. Line Graph Encoder (for bond angles)
 4. Graph-to-Graph Message Passing
-5. Barrier Predictor (MLP)
+5. Barrier Predictor (MLP) - MODIFIED for Relaxation Progress
 
 Key features:
 - Learned embeddings instead of one-hot encoding
 - Optional atomic property concatenation
 - Residual connections for gradient flow
 - Normalized bond-to-atom aggregation
+- NEW: Weighted Loss support via Progress input
 """
 
 import torch
@@ -221,18 +222,6 @@ class ALIGNNEncoder(nn.Module):
     def forward(self, data):
         """
         Forward pass through encoder.
-        
-        Args:
-            data: PyG Data object with:
-                - x_element: Element indices [n_atoms] (LongTensor)
-                - x_props: Atomic properties [n_atoms, 8] (FloatTensor, optional)
-                - edge_index: Atom graph edges [2, n_edges]
-                - edge_attr: Bond distances [n_edges, 1]
-                - line_graph_* : Line graph data (if enabled)
-                - batch: Batch assignment [n_atoms]
-        
-        Returns:
-            Graph embedding [batch_size, embedding_dim]
         """
         # Get atom graph data
         edge_index = data.edge_index
@@ -330,13 +319,8 @@ class BarrierPredictor(nn.Module):
     """
     MLP for barrier prediction from graph embeddings.
     
-    Takes embeddings of initial and final structures and predicts
-    the energy barrier between them.
-    
-    Input features:
-    - Initial structure embedding
-    - Final structure embedding  
-    - Difference embedding (final - initial)
+    MODIFIED: Takes embeddings of initial and final structures AND RELAXATION PROGRESS
+    to predict the energy barrier.
     """
     
     def __init__(self, embedding_dim: int = 64, hidden_dims: list = None, dropout: float = 0.1):
@@ -345,8 +329,8 @@ class BarrierPredictor(nn.Module):
         if hidden_dims is None:
             hidden_dims = [512, 256, 128]
         
-        # Input: concatenation of initial, final, and difference embeddings
-        input_dim = 3 * embedding_dim
+        # Input: concatenation of initial, final, difference embeddings + 2 progress scalars
+        input_dim = 3 * embedding_dim + 2
         
         layers = []
         prev_dim = input_dim
@@ -365,22 +349,33 @@ class BarrierPredictor(nn.Module):
         
         self.network = nn.Sequential(*layers)
     
-    def forward(self, emb_initial, emb_final):
+    def forward(self, emb_initial, emb_final, progress_initial, progress_final):
         """
-        Predict barrier from structure embeddings.
+        Predict barrier from structure embeddings and progress.
         
         Args:
             emb_initial: Initial structure embedding [batch_size, embedding_dim]
             emb_final: Final structure embedding [batch_size, embedding_dim]
-        
-        Returns:
-            Predicted barrier [batch_size, 1]
+            progress_initial: Relaxation progress of initial struct [batch_size, 1]
+            progress_final: Relaxation progress of final struct [batch_size, 1]
         """
         # Compute difference embedding
         delta_emb = emb_final - emb_initial
         
+        # Ensure progress shapes are correct [Batch, 1]
+        if progress_initial.dim() == 1:
+            progress_initial = progress_initial.unsqueeze(1)
+        if progress_final.dim() == 1:
+            progress_final = progress_final.unsqueeze(1)
+            
         # Concatenate all information
-        combined = torch.cat([emb_initial, emb_final, delta_emb], dim=1)
+        combined = torch.cat([
+            emb_initial, 
+            emb_final, 
+            delta_emb,
+            progress_initial,
+            progress_final
+        ], dim=1)
         
         return self.network(combined)
 
@@ -391,9 +386,7 @@ class DiffusionBarrierModel(nn.Module):
     
     Architecture:
     1. Shared ALIGNN encoder for both structures
-    2. MLP predictor for barrier from embeddings
-    
-    Uses learned atom embeddings instead of one-hot encoding.
+    2. MLP predictor for barrier from embeddings + Progress
     """
     
     def __init__(
@@ -462,19 +455,19 @@ class DiffusionBarrierModel(nn.Module):
         """
         Predict barrier between initial and final structures.
         
-        Args:
-            initial_graph: PyG Data/Batch for initial structure
-            final_graph: PyG Data/Batch for final structure
-        
-        Returns:
-            Predicted barrier [batch_size, 1]
+        Automatically extracts relaxation progress from graphs.
         """
         # Encode both structures with shared encoder
         emb_initial = self.encoder(initial_graph)
         emb_final = self.encoder(final_graph)
         
+        # Extract Progress (NEW FEATURE)
+        # Note: GraphBuilder adds this attribute to the Data object
+        progress_initial = initial_graph.relax_progress
+        progress_final = final_graph.relax_progress
+        
         # Predict barrier
-        return self.predictor(emb_initial, emb_final)
+        return self.predictor(emb_initial, emb_final, progress_initial, progress_final)
 
 
 def create_model_from_config(config, num_elements: int):
@@ -524,7 +517,7 @@ def count_parameters(model):
 
 if __name__ == "__main__":
     print("="*70)
-    print("ALIGNN MODEL WITH ATOM EMBEDDINGS")
+    print("ALIGNN MODEL WITH ATOM EMBEDDINGS (UPDATED FOR PROGRESS)")
     print("="*70)
     
     # Test model creation
