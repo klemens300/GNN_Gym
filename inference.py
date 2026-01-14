@@ -1,18 +1,6 @@
 """
 Inference and Active Learning Query Module
-
-Handles:
-- Test composition generation
-- Oracle-based test data generation
-- Model predictions
-- Error-based query strategy with MIXED SAMPLING
-- Convergence checking for Active Learning
-- GPU memory cleanup
-
-?? NEW: Mixed Sampling Strategy
-- Combines exploitation (high-error regions) with exploration (random)
-- Prevents getting stuck on outliers
-- Configurable exploitation/exploration ratio
+UPDATED: Uses unrelaxed .npz files for realistic KMC-like prediction.
 """
 
 import numpy as np
@@ -22,74 +10,32 @@ import gc
 import logging
 from pathlib import Path
 from typing import List, Tuple, Optional
-from tqdm import tqdm
 
 from config import Config
 from oracle import Oracle
 from utils import load_model_for_inference
 from graph_builder import GraphBuilder
 
-
 # ============================================================================
 # GPU CLEANUP
 # ============================================================================
 
 def cleanup_gpu():
-    """
-    Clean GPU memory after heavy operations.
-    Call after Oracle and Model operations.
-    """
+    """Clean GPU memory."""
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     gc.collect()
-
 
 # ============================================================================
 # LOGGER SETUP
 # ============================================================================
 
 def setup_inference_logger(cycle: int, config: Config):
-    """
-    Setup logger for inference cycle.
-    
-    Args:
-        cycle: Cycle number
-        config: Config object
-    
-    Returns:
-        logger: Configured logger
-    """
+    """Setup logger for inference cycle."""
     logger = logging.getLogger(f"inference_cycle_{cycle}")
     logger.setLevel(getattr(logging, config.log_level.upper()))
-    logger.handlers = []  # Clear existing handlers
-    
-    # File handler
-    log_file = Path(config.log_dir) / f"inference_cycle_{cycle}.log"
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-    fh = logging.FileHandler(log_file)
-    fh.setLevel(getattr(logging, config.log_level.upper()))
-    
-    # Console handler (optional)
-    if config.log_to_console:
-        ch = logging.StreamHandler()
-        ch.setLevel(getattr(logging, config.log_level.upper()))
-    
-    # Formatter
-    formatter = logging.Formatter(
-        '%(asctime)s | %(levelname)-8s | %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-    fh.setFormatter(formatter)
-    if config.log_to_console:
-        ch.setFormatter(formatter)
-    
-    # Add handlers
-    logger.addHandler(fh)
-    if config.log_to_console:
-        logger.addHandler(ch)
-    
+    # No handler reset logic here to avoid messing with main loop logging
     return logger
-
 
 # ============================================================================
 # 1. TEST COMPOSITION GENERATION
@@ -101,35 +47,19 @@ def generate_test_compositions(
     strategy: str = 'uniform',
     seed: int = 42
 ) -> List[dict]:
-    """
-    Generate test compositions for prediction.
-    
-    Args:
-        elements: List of element symbols
-        n_test: Number of test compositions
-        strategy: Sampling strategy ('uniform')
-        seed: Random seed
-    
-    Returns:
-        compositions: List of composition dicts {element: fraction}
-    """
+    """Generate test compositions."""
     np.random.seed(seed)
     
     if strategy == 'uniform':
-        # Uniform sampling on simplex using Dirichlet
         alpha = np.ones(len(elements))
         fractions = np.random.dirichlet(alpha, size=n_test)
-        
         compositions = []
         for frac in fractions:
             comp = {elem: float(f) for elem, f in zip(elements, frac)}
             compositions.append(comp)
-        
         return compositions
-    
     else:
         raise ValueError(f"Unknown strategy: {strategy}")
-
 
 # ============================================================================
 # 2. ORACLE-BASED TEST DATA GENERATION
@@ -139,114 +69,92 @@ def generate_test_data_with_oracle(
     compositions: List[dict],
     oracle: Oracle,
     config: Config,
-    verbose: bool = False
+    logger: Optional[logging.Logger] = None
 ) -> pd.DataFrame:
-    """
-    Generate test data using Oracle (NEB calculations).
-    
-    Args:
-        compositions: List of composition dicts
-        oracle: Oracle instance
-        config: Config object
-        verbose: Print progress
-    
-    Returns:
-        test_data: DataFrame with columns:
-            - composition_string
-            - structure_folder
-            - backward_barrier_eV
-    """
+    """Generate test data using Oracle (No TQDM, clean logging)."""
     results = []
+    total = len(compositions)
     
-    iterator = tqdm(compositions, desc="Generating test data") if verbose else compositions
-    
-    for comp in iterator:
-        # Run Oracle calculation
+    if logger:
+        logger.info(f"Generating test data for {total} compositions...")
+
+    for i, comp in enumerate(compositions, 1):
+        if logger and (i % 50 == 0 or i == 1):
+            logger.info(f"  Test Data Gen: {i}/{total}")
+            for h in logger.handlers: h.flush()
+            
         success = oracle.calculate(comp)
         
         if success:
-            # Read last entry from CSV
             df = pd.read_csv(config.csv_path)
             last_entry = df.iloc[-1]
-            
             results.append({
                 'composition_string': last_entry['composition_string'],
                 'structure_folder': last_entry['structure_folder'],
                 'backward_barrier_eV': last_entry['backward_barrier_eV']
             })
     
-    # Cleanup after Oracle operations
     cleanup_gpu()
-    
     return pd.DataFrame(results)
 
-
 # ============================================================================
-# 3. MODEL PREDICTIONS
+# 3. MODEL PREDICTIONS (UPDATED FOR UNRELAXED NPZ)
 # ============================================================================
 
 def predict_barriers_for_test_set(
     model_path: str,
     test_data: pd.DataFrame,
     config: Config,
-    verbose: bool = False
+    logger: Optional[logging.Logger] = None
 ) -> pd.DataFrame:
     """
-    Predict barriers for test set using trained model.
-    
-    Args:
-        model_path: Path to trained model checkpoint
-        test_data: DataFrame with structure_folder and backward_barrier_eV columns
-        config: Config object
-        verbose: Print progress
-    
-    Returns:
-        predictions: DataFrame with additional columns:
-            - predicted_barrier
-            - absolute_error
-            - relative_error
+    Predict barriers using UNRELAXED structures from .npz files.
+    This simulates the real KMC use-case.
     """
-    # Load model
     model, checkpoint = load_model_for_inference(model_path, config)
     model.eval()
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = model.to(device)
     
-    # Build graph builder
     builder = GraphBuilder(config, csv_path=config.csv_path)
-    
     predictions = []
     
-    iterator = tqdm(test_data.iterrows(), total=len(test_data), 
-                   desc="Predicting barriers") if verbose else test_data.iterrows()
-    
-    for idx, row in iterator:
-        structure_folder = Path(row['structure_folder'])
+    total = len(test_data)
+    if logger:
+        logger.info(f"Predicting {total} barriers using unrelaxed structures...")
+
+    for i, (idx, row) in enumerate(test_data.iterrows(), 1):
+        if logger and (i % 100 == 0):
+            logger.info(f"  Prediction: {i}/{total}")
         
-        # Use correct column name from CSV
+        structure_folder = Path(row['structure_folder'])
         oracle_barrier = row['backward_barrier_eV']
         
-        # Make path absolute if needed
         if not structure_folder.is_absolute():
             csv_parent = Path(config.csv_path).parent
             structure_folder = csv_parent / structure_folder
         
-        # Build graphs
-        initial_cif = structure_folder / "initial_relaxed.cif"
-        final_cif = structure_folder / "final_relaxed.cif"
+        # ?? CRITICAL UPDATE: Load UNRELAXED .npz files
+        initial_file = structure_folder / "initial_unrelaxed.npz"
+        final_file = structure_folder / "final_unrelaxed.npz"
         
+        # Fallback to CIF if NPZ missing (legacy data)
+        if not initial_file.exists(): initial_file = structure_folder / "initial_unrelaxed.cif"
+        if not final_file.exists(): final_file = structure_folder / "final_unrelaxed.cif"
+        
+        # Build graphs with forced progress=0.0 (Unrelaxed)
         initial_graph, final_graph = builder.build_pair_graph(
-            str(initial_cif),
-            str(final_cif),
-            backward_barrier=oracle_barrier
+            str(initial_file),
+            str(final_file),
+            backward_barrier=oracle_barrier,
+            progress_initial=0.0,  # Force unrelaxed state
+            progress_final=0.0     # Force unrelaxed state
         )
         
-        # Move to device
         initial_graph = initial_graph.to(device)
         final_graph = final_graph.to(device)
         
-        # Predict
         with torch.no_grad():
             from torch_geometric.data import Batch
             initial_batch = Batch.from_data_list([initial_graph])
@@ -255,7 +163,6 @@ def predict_barriers_for_test_set(
             prediction = model(initial_batch, final_batch)
             predicted_barrier = prediction.item()
         
-        # Calculate errors
         abs_error = abs(predicted_barrier - oracle_barrier)
         rel_error = abs_error / (oracle_barrier + 1e-8)
         
@@ -268,250 +175,103 @@ def predict_barriers_for_test_set(
             'relative_error': rel_error
         })
     
-    # Cleanup after predictions
     cleanup_gpu()
-    
     return pd.DataFrame(predictions)
 
-
 # ============================================================================
-# 4. QUERY STRATEGY - MIXED SAMPLING (NEW!)
+# 4. QUERY STRATEGY
 # ============================================================================
-
-def select_samples_mixed(
-    predictions: pd.DataFrame,
-    n_query: int,
-    exploitation_ratio: float = 0.5,
-    error_cap_multiplier: float = 3.0,
-    seed: int = 42,
-    logger: Optional[logging.Logger] = None
-) -> List[dict]:
-    """
-    ?? Mixed Sampling Strategy: Exploitation + Exploration
-    
-    Combines:
-    - Exploitation: Sample high-error regions (with capping to avoid outliers)
-    - Exploration: Random uniform sampling
-    
-    This prevents getting stuck on single outlier samples!
-    
-    Args:
-        predictions: DataFrame with relative_error column
-        n_query: Total number of samples to select
-        exploitation_ratio: Fraction for exploitation (0.0 to 1.0)
-            - 0.0 = 100% random (pure exploration)
-            - 0.5 = 50% high-error + 50% random (BALANCED)
-            - 1.0 = 100% error-weighted (pure exploitation)
-        error_cap_multiplier: Cap errors at N × median_error
-            - Prevents single outliers from dominating
-        seed: Random seed
-        logger: Optional logger for diagnostics
-    
-    Returns:
-        selected_samples: List of dicts with composition info
-    
-    Example:
-        >>> selected = select_samples_mixed(
-        ...     predictions, 
-        ...     n_query=100, 
-        ...     exploitation_ratio=0.5  # 50/50 split
-        ... )
-    """
-    np.random.seed(seed)
-    
-    n_query = min(n_query, len(predictions))
-    
-    # Split budget
-    n_exploit = int(n_query * exploitation_ratio)
-    n_explore = n_query - n_exploit
-    
-    if logger:
-        logger.info(f"Mixed Sampling Strategy:")
-        logger.info(f"  Total queries: {n_query}")
-        logger.info(f"  Exploitation: {n_exploit} ({exploitation_ratio*100:.0f}%)")
-        logger.info(f"  Exploration: {n_explore} ({(1-exploitation_ratio)*100:.0f}%)")
-        logger.info(f"  Error cap: {error_cap_multiplier}× median")
-    
-    # ----------------------------------------------------------------
-    # 1. EXPLOITATION: Error-weighted sampling with capping
-    # ----------------------------------------------------------------
-    if n_exploit > 0:
-        rel_errors = predictions['relative_error'].values
-        median_error = np.median(rel_errors)
-        
-        # Cap errors to prevent outlier dominance
-        capped_errors = np.minimum(rel_errors, error_cap_multiplier * median_error)
-        
-        # Calculate weights
-        weights = capped_errors / capped_errors.sum()
-        
-        # Sample without replacement
-        exploit_indices = np.random.choice(
-            len(predictions),
-            size=n_exploit,
-            replace=False,
-            p=weights
-        )
-        
-        if logger:
-            # Count how many samples hit the cap
-            n_capped = (rel_errors > error_cap_multiplier * median_error).sum()
-            logger.info(f"  Capped {n_capped}/{len(predictions)} outliers (>{error_cap_multiplier}× median)")
-            
-            # Show error statistics
-            exploit_errors = rel_errors[exploit_indices]
-            logger.info(f"  Exploitation samples:")
-            logger.info(f"    Mean rel. error: {exploit_errors.mean():.3f}")
-            logger.info(f"    Max rel. error: {exploit_errors.max():.3f}")
-    else:
-        exploit_indices = np.array([], dtype=int)
-    
-    # ----------------------------------------------------------------
-    # 2. EXPLORATION: Uniform random sampling
-    # ----------------------------------------------------------------
-    if n_explore > 0:
-        # Sample from remaining indices
-        remaining_indices = list(set(range(len(predictions))) - set(exploit_indices))
-        
-        if len(remaining_indices) < n_explore:
-            # Not enough remaining - take all
-            explore_indices = np.array(remaining_indices)
-            if logger:
-                logger.warning(f"  Only {len(remaining_indices)} samples available for exploration")
-        else:
-            explore_indices = np.random.choice(
-                remaining_indices,
-                size=n_explore,
-                replace=False
-            )
-        
-        if logger:
-            rel_errors = predictions['relative_error'].values
-            explore_errors = rel_errors[explore_indices]
-            logger.info(f"  Exploration samples:")
-            logger.info(f"    Mean rel. error: {explore_errors.mean():.3f}")
-            logger.info(f"    Max rel. error: {explore_errors.max():.3f}")
-    else:
-        explore_indices = np.array([], dtype=int)
-    
-    # ----------------------------------------------------------------
-    # 3. COMBINE
-    # ----------------------------------------------------------------
-    selected_indices = np.concatenate([exploit_indices, explore_indices])
-    
-    # Convert to list of dicts
-    selected_samples = []
-    for idx in selected_indices:
-        row = predictions.iloc[idx]
-        selected_samples.append({
-            'composition_str': row['composition'],
-            'structure_folder': row['structure_folder'],
-            'oracle_barrier': row['oracle_barrier'],
-            'predicted_barrier': row['predicted_barrier'],
-            'relative_error': row['relative_error']
-        })
-    
-    return selected_samples
-
 
 def select_samples_by_error(
     predictions: pd.DataFrame,
     n_query: int = 10,
-    strategy: str = 'error_weighted',
+    strategy: str = 'mixed',
     seed: int = 42,
     config: Optional[Config] = None,
     logger: Optional[logging.Logger] = None
 ) -> List[dict]:
-    """
-    Select samples for training based on prediction error.
-    
-    Supports two strategies:
-    - 'error_weighted': Pure error-weighted sampling
-    - 'mixed': Mixed exploitation/exploration (RECOMMENDED)
-    
-    Args:
-        predictions: DataFrame with relative_error column
-        n_query: Number of samples to select
-        strategy: Selection strategy ('error_weighted' or 'mixed')
-        seed: Random seed
-        config: Config object (for mixed sampling parameters)
-        logger: Optional logger
-    
-    Returns:
-        selected_samples: List of dicts with composition info
-    """
+    """Select samples (Mixed or Error Weighted)."""
     np.random.seed(seed)
     
-    # ?? NEW: Mixed sampling
     if strategy == 'mixed':
-        if config is None:
-            raise ValueError("Config required for mixed sampling strategy")
-        
-        return select_samples_mixed(
-            predictions=predictions,
-            n_query=n_query,
-            exploitation_ratio=config.al_mixed_exploitation_ratio,
-            error_cap_multiplier=config.al_error_cap_multiplier,
-            seed=seed,
-            logger=logger
-        )
+        if config is None: raise ValueError("Config required for mixed sampling")
+        return select_samples_mixed(predictions, n_query, config.al_mixed_exploitation_ratio, config.al_error_cap_multiplier, seed, logger)
     
-    # Original error-weighted sampling
     elif strategy == 'error_weighted':
-        # Sample proportional to relative error
         weights = predictions['relative_error'].values
         weights = weights / weights.sum()
+        indices = np.random.choice(len(predictions), size=min(n_query, len(predictions)), replace=False, p=weights)
         
-        # Sample without replacement
-        n_query = min(n_query, len(predictions))
-        indices = np.random.choice(
-            len(predictions),
-            size=n_query,
-            replace=False,
-            p=weights
-        )
-        
-        selected_samples = []
+        selected = []
         for idx in indices:
             row = predictions.iloc[idx]
-            selected_samples.append({
+            selected.append({
                 'composition_str': row['composition'],
                 'structure_folder': row['structure_folder'],
                 'oracle_barrier': row['oracle_barrier'],
                 'predicted_barrier': row['predicted_barrier'],
                 'relative_error': row['relative_error']
             })
-        
-        return selected_samples
-    
+        return selected
     else:
         raise ValueError(f"Unknown strategy: {strategy}")
 
+def select_samples_mixed(
+    predictions: pd.DataFrame,
+    n_query: int,
+    exploitation_ratio: float,
+    error_cap_multiplier: float,
+    seed: int,
+    logger: Optional[logging.Logger]
+) -> List[dict]:
+    """Mixed sampling: Exploitation + Exploration."""
+    np.random.seed(seed)
+    n_query = min(n_query, len(predictions))
+    n_exploit = int(n_query * exploitation_ratio)
+    n_explore = n_query - n_exploit
+    
+    # Exploitation
+    if n_exploit > 0:
+        rel_errors = predictions['relative_error'].values
+        median_error = np.median(rel_errors)
+        capped_errors = np.minimum(rel_errors, error_cap_multiplier * median_error)
+        weights = capped_errors / capped_errors.sum()
+        exploit_indices = np.random.choice(len(predictions), size=n_exploit, replace=False, p=weights)
+    else:
+        exploit_indices = np.array([], dtype=int)
+        
+    # Exploration
+    if n_explore > 0:
+        remaining = list(set(range(len(predictions))) - set(exploit_indices))
+        if len(remaining) < n_explore:
+            explore_indices = np.array(remaining)
+        else:
+            explore_indices = np.random.choice(remaining, size=n_explore, replace=False)
+    else:
+        explore_indices = np.array([], dtype=int)
+        
+    selected_indices = np.concatenate([exploit_indices, explore_indices])
+    
+    selected = []
+    for idx in selected_indices:
+        row = predictions.iloc[idx]
+        selected.append({
+            'composition_str': row['composition'],
+            'structure_folder': row['structure_folder'],
+            'oracle_barrier': row['oracle_barrier'],
+            'predicted_barrier': row['predicted_barrier'],
+            'relative_error': row['relative_error']
+        })
+    return selected
 
 # ============================================================================
-# 4.5. QUERY COMPOSITION GENERATION
+# 5. QUERY GENERATION
 # ============================================================================
 
 def parse_composition_string(comp_str: str) -> dict:
-    """
-    Parse composition string to dict.
-
-    Args:
-        comp_str: Composition string like 'Mo0.50W0.50'
-
-    Returns:
-        composition: Dict {element: fraction}
-    """
     import re
-    pattern = r'([A-Z][a-z]?)(\d+\.\d+)'
-    matches = re.findall(pattern, comp_str)
-
-    composition = {}
-    for element, fraction in matches:
-        composition[element] = float(fraction)
-
-    return composition
-
+    matches = re.findall(r'([A-Z][a-z]?)(\d+\.\d+)', comp_str)
+    return {el: float(frac) for el, frac in matches}
 
 def generate_query_compositions_from_selected(
     selected_samples: List[dict],
@@ -521,161 +281,30 @@ def generate_query_compositions_from_selected(
     noise_level: float = 0.1,
     seed: int = 42
 ) -> List[dict]:
-    """
-    Generate new query compositions based on selected high-error samples.
-
-    Strategy:
-    - 'nearby': Generate compositions near high-error samples with random noise
-    - 'interpolate': Generate compositions by interpolating between high-error samples
-
-    Args:
-        selected_samples: List of selected samples from select_samples_by_error
-        n_query: Number of query compositions to generate
-        elements: List of element symbols
-        strategy: Generation strategy ('nearby', 'interpolate')
-        noise_level: Amount of noise to add (0.0 to 1.0)
-        seed: Random seed
-
-    Returns:
-        query_compositions: List of composition dicts
-    """
     np.random.seed(seed)
-
-    if not selected_samples:
-        raise ValueError("No selected samples provided")
-
     query_compositions = []
+    n_selected = len(selected_samples)
+    base_indices = np.random.choice(n_selected, size=n_query, replace=True)
 
-    if strategy == 'nearby':
-        # Generate compositions near high-error samples
-        # Sample selected_samples with replacement to get n_query base compositions
-        n_selected = len(selected_samples)
-        base_indices = np.random.choice(n_selected, size=n_query, replace=True)
-
-        for idx in base_indices:
-            sample = selected_samples[idx]
-            # Parse composition string
-            base_comp = parse_composition_string(sample['composition_str'])
-
-            # Add noise to composition
-            comp_array = np.array([base_comp.get(elem, 0.0) for elem in elements])
-
-            # Add Dirichlet noise (keeps on simplex)
-            # Higher alpha = less noise
-            alpha = comp_array / noise_level + 1e-6
-            alpha = np.maximum(alpha, 0.1)  # Ensure positive
-            noisy_comp = np.random.dirichlet(alpha)
-
-            # Create composition dict
-            new_comp = {elem: float(frac) for elem, frac in zip(elements, noisy_comp)}
-            query_compositions.append(new_comp)
-
-    elif strategy == 'interpolate':
-        # Generate compositions by interpolating between pairs of high-error samples
-        n_selected = len(selected_samples)
-
-        for i in range(n_query):
-            # Pick two random samples
-            idx1, idx2 = np.random.choice(n_selected, size=2, replace=True)
-            sample1 = selected_samples[idx1]
-            sample2 = selected_samples[idx2]
-
-            # Parse compositions
-            comp1 = parse_composition_string(sample1['composition_str'])
-            comp2 = parse_composition_string(sample2['composition_str'])
-
-            # Random interpolation weight
-            weight = np.random.random()
-
-            # Interpolate
-            new_comp = {}
-            for elem in elements:
-                frac1 = comp1.get(elem, 0.0)
-                frac2 = comp2.get(elem, 0.0)
-                new_comp[elem] = weight * frac1 + (1 - weight) * frac2
-
-            # Normalize to sum to 1.0
-            total = sum(new_comp.values())
-            if total > 0:
-                new_comp = {elem: frac / total for elem, frac in new_comp.items()}
-
-            query_compositions.append(new_comp)
-
-    else:
-        raise ValueError(f"Unknown strategy: {strategy}")
+    for idx in base_indices:
+        sample = selected_samples[idx]
+        base_comp = parse_composition_string(sample['composition_str'])
+        comp_array = np.array([base_comp.get(elem, 0.0) for elem in elements])
+        
+        alpha = comp_array / noise_level + 1e-6
+        alpha = np.maximum(alpha, 0.1)
+        noisy_comp = np.random.dirichlet(alpha)
+        
+        query_compositions.append({elem: float(frac) for elem, frac in zip(elements, noisy_comp)})
 
     return query_compositions
 
-
-def generate_and_calculate_query_data(
-    selected_samples: List[dict],
-    oracle: Oracle,
-    config: Config,
-    verbose: bool = False
-) -> int:
-    """
-    Generate and calculate query compositions based on high-error samples.
-
-    This function:
-    1. Generates new compositions near high-error samples
-    2. Calculates barriers with Oracle (adds to CSV)
-    3. Returns number of successful calculations
-
-    Args:
-        selected_samples: List of selected high-error samples
-        oracle: Oracle instance
-        config: Config object
-        verbose: Print progress
-
-    Returns:
-        n_successful: Number of successfully calculated query samples
-    """
-    elements = list(config.elements)
-    n_query = config.al_n_query
-
-    # Generate query compositions
-    query_compositions = generate_query_compositions_from_selected(
-        selected_samples=selected_samples,
-        n_query=n_query,
-        elements=elements,
-        strategy='nearby',
-        noise_level=0.1,
-        seed=config.al_seed
-    )
-
-    # Calculate with Oracle
-    n_successful = 0
-    iterator = tqdm(query_compositions, desc="Calculating query data") if verbose else query_compositions
-
-    for comp in iterator:
-        success = oracle.calculate(comp)
-        if success:
-            n_successful += 1
-
-    # Cleanup after Oracle operations
-    cleanup_gpu()
-
-    return n_successful
-
-
 # ============================================================================
-# 5. CONVERGENCE CHECKING
+# 6. CONVERGENCE TRACKER
 # ============================================================================
 
 class ConvergenceTracker:
-    """
-    Track convergence metrics across Active Learning cycles.
-    
-    Tracks MAE and relative MAE to determine if model has converged.
-    """
-    
     def __init__(self, config: Config):
-        """
-        Initialize convergence tracker.
-        
-        Args:
-            config: Config object with convergence parameters
-        """
         self.config = config
         self.history = []
         self.best_mae = float('inf')
@@ -683,88 +312,38 @@ class ConvergenceTracker:
         self.cycles_without_improvement = 0
     
     def update(self, cycle: int, mae: float, rel_mae: float) -> bool:
-        """
-        Update tracker with new cycle metrics.
+        self.history.append({'cycle': cycle, 'mae': mae, 'rel_mae': rel_mae})
         
-        Args:
-            cycle: Cycle number
-            mae: Mean Absolute Error (eV)
-            rel_mae: Relative MAE
-        
-        Returns:
-            converged: True if convergence criteria met
-        """
-        self.history.append({
-            'cycle': cycle,
-            'mae': mae,
-            'rel_mae': rel_mae
-        })
-        
-        # Check for improvement based on selected metric
         metric = self.config.al_convergence_metric
+        current = mae if metric == 'mae' else rel_mae
+        best = self.best_mae if metric == 'mae' else self.best_rel_mae
+        threshold = self.config.al_convergence_threshold_mae if metric == 'mae' else self.config.al_convergence_threshold_rel_mae
         
-        if metric == "mae":
-            current_value = mae
-            best_value = self.best_mae
-            threshold = self.config.al_convergence_threshold_mae
-        elif metric == "rel_mae":
-            current_value = rel_mae
-            best_value = self.best_rel_mae
-            threshold = self.config.al_convergence_threshold_rel_mae
-        else:
-            raise ValueError(f"Unknown convergence metric: {metric}")
-        
-        # Check if improved
-        if current_value < best_value - threshold:
-            # Significant improvement
-            if metric == "mae":
-                self.best_mae = current_value
-            else:
-                self.best_rel_mae = current_value
-            
+        if current < best - threshold:
+            if metric == 'mae': self.best_mae = current
+            else: self.best_rel_mae = current
             self.cycles_without_improvement = 0
             return False
         else:
-            # No significant improvement
             self.cycles_without_improvement += 1
-            
-            if self.cycles_without_improvement >= self.config.al_convergence_patience:
-                return True  # Converged
-            else:
-                return False
+            return self.cycles_without_improvement >= self.config.al_convergence_patience
     
     def get_summary(self) -> dict:
-        """Get convergence summary."""
         return {
             'history': self.history,
             'best_mae': self.best_mae,
-            'best_rel_mae': self.best_rel_mae,
-            'cycles_without_improvement': self.cycles_without_improvement,
             'converged': self.cycles_without_improvement >= self.config.al_convergence_patience
         }
 
-
 def save_convergence_history(tracker: ConvergenceTracker, save_path: str):
-    """
-    Save convergence history to file.
-    
-    Args:
-        tracker: ConvergenceTracker instance
-        save_path: Path to save JSON file
-    """
     import json
-    
     save_path = Path(save_path)
     save_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    summary = tracker.get_summary()
-    
     with open(save_path, 'w') as f:
-        json.dump(summary, f, indent=2)
-
+        json.dump(tracker.get_summary(), f, indent=2)
 
 # ============================================================================
-# 6. COMPLETE INFERENCE CYCLE
+# 7. INFERENCE CYCLE
 # ============================================================================
 
 def run_inference_cycle(
@@ -775,160 +354,41 @@ def run_inference_cycle(
     convergence_tracker: Optional[ConvergenceTracker] = None,
     verbose: bool = True
 ) -> Tuple[List[dict], pd.DataFrame]:
-    """
-    Run complete inference cycle for Active Learning.
-    
-    Workflow:
-    1. Generate test compositions
-    2. Calculate barriers with Oracle
-    3. Predict with model
-    4. Select high-error samples for training (with MIXED SAMPLING!)
-    5. Check convergence (optional)
-    
-    Args:
-        cycle: Cycle number
-        model_path: Path to trained model
-        oracle: Oracle instance
-        config: Config object
-        convergence_tracker: ConvergenceTracker instance (optional)
-        verbose: Print progress
-    
-    Returns:
-        selected_samples: List of selected samples for next training
-        predictions: Full predictions DataFrame
-    """
+    """Run complete inference cycle."""
     logger = setup_inference_logger(cycle, config)
-    
-    logger.info("="*70)
     logger.info(f"INFERENCE CYCLE {cycle}")
-    logger.info("="*70)
     
-    # Get elements from config
-    elements = list(config.elements)
-    
-    # 1. Generate test compositions
-    logger.info(f"Step 1: Generating {config.al_n_test} test compositions")
+    # 1. Test compositions
     test_compositions = generate_test_compositions(
-        elements=elements,
-        n_test=config.al_n_test,
-        strategy=config.al_test_strategy,
-        seed=config.al_seed + cycle
+        config.elements, config.al_test_set_size, 
+        config.al_test_set_strategy, config.al_seed + cycle
     )
-    logger.info(f"  Generated {len(test_compositions)} compositions")
     
-    # 2. Generate test data with Oracle
-    logger.info(f"Step 2: Calculating barriers with Oracle")
-    test_data = generate_test_data_with_oracle(
-        compositions=test_compositions,
-        oracle=oracle,
-        config=config,
-        verbose=verbose
-    )
-    logger.info(f"  Calculated {len(test_data)} barriers")
+    # 2. Test data (Oracle)
+    test_data = generate_test_data_with_oracle(test_compositions, oracle, config, logger)
     
-    # 3. Predict with model
-    logger.info(f"Step 3: Predicting barriers with model")
-    predictions = predict_barriers_for_test_set(
-        model_path=model_path,
-        test_data=test_data,
-        config=config,
-        verbose=verbose
-    )
-    logger.info(f"  Made {len(predictions)} predictions")
+    # 3. Predict (Unrelaxed NPZ)
+    predictions = predict_barriers_for_test_set(model_path, test_data, config, logger)
     
-    # Calculate statistics
     mae = predictions['absolute_error'].mean()
     rel_mae = predictions['relative_error'].mean()
-    max_error = predictions['absolute_error'].max()
+    logger.info(f"Stats: MAE={mae:.4f} eV, RelMAE={rel_mae:.4f}")
     
-    logger.info(f"\nPrediction Statistics:")
-    logger.info(f"  MAE: {mae:.4f} eV")
-    logger.info(f"  Relative MAE: {rel_mae:.4f}")
-    logger.info(f"  Max error: {max_error:.4f} eV")
-    
-    # 4. Update convergence tracker
-    if convergence_tracker is not None:
+    # 4. Convergence
+    if convergence_tracker:
         converged = convergence_tracker.update(cycle, mae, rel_mae)
-        logger.info(f"\nConvergence Status:")
-        logger.info(f"  Metric: {config.al_convergence_metric}")
-        logger.info(f"  Best MAE: {convergence_tracker.best_mae:.4f} eV")
-        logger.info(f"  Best Rel MAE: {convergence_tracker.best_rel_mae:.4f}")
-        logger.info(f"  Cycles without improvement: {convergence_tracker.cycles_without_improvement}")
-        logger.info(f"  Converged: {converged}")
+        logger.info(f"Converged: {converged}")
     
-    # 5. Select samples for training with MIXED SAMPLING
-    logger.info(f"\n?? Step 4: Selecting {config.al_n_query} samples (MIXED SAMPLING)")
-    logger.info(f"  Strategy: {config.al_query_strategy}")
-    
-    if config.al_query_strategy == 'mixed':
-        logger.info(f"  Exploitation ratio: {config.al_mixed_exploitation_ratio}")
-        logger.info(f"  Error cap: {config.al_error_cap_multiplier}× median")
-    
-    selected_samples = select_samples_by_error(
-        predictions=predictions,
-        n_query=config.al_n_query,
-        strategy=config.al_query_strategy,
-        seed=config.al_seed + cycle,
-        config=config,
-        logger=logger
+    # 5. Select
+    selected = select_samples_by_error(
+        predictions, config.al_n_query, config.al_query_strategy,
+        config.al_seed + cycle, config, logger
     )
-    logger.info(f"  Selected {len(selected_samples)} samples")
+    logger.info(f"Selected {len(selected)} samples")
     
-    # Show top errors
-    logger.info(f"\nTop 5 selected samples by error:")
-    for i, sample in enumerate(selected_samples[:5], 1):
-        logger.info(
-            f"  {i}. {sample['composition_str']}: "
-            f"Oracle={sample['oracle_barrier']:.3f} eV, "
-            f"Pred={sample['predicted_barrier']:.3f} eV, "
-            f"RelErr={sample['relative_error']:.3f}"
-        )
-    
-    # 6. Save predictions
+    # 6. Save
     results_dir = Path(config.al_results_dir)
     results_dir.mkdir(parents=True, exist_ok=True)
+    predictions.to_csv(results_dir / f"cycle_{cycle}_predictions.csv", index=False)
     
-    predictions_file = results_dir / f"cycle_{cycle}_predictions.csv"
-    predictions.to_csv(predictions_file, index=False)
-    logger.info(f"\nPredictions saved: {predictions_file}")
-    
-    logger.info("="*70)
-    
-    return selected_samples, predictions
-
-
-# ============================================================================
-# EXAMPLE USAGE
-# ============================================================================
-
-if __name__ == "__main__":
-    print("="*70)
-    print("INFERENCE MODULE WITH MIXED SAMPLING")
-    print("="*70)
-    
-    print("\n?? NEW: Mixed Sampling Strategy")
-    print("  - Combines exploitation + exploration")
-    print("  - Prevents outlier dominance")
-    print("  - Configurable ratio (default: 50/50)")
-    
-    print("\nFeatures:")
-    print("  1. Test composition generation")
-    print("  2. Oracle-based test data generation")
-    print("  3. Model predictions")
-    print("  4. ?? Mixed error-weighted + random sampling")
-    print("  5. Convergence checking")
-    print("  6. Complete inference cycle")
-    
-    print("\nUsage:")
-    print("  from inference import run_inference_cycle, ConvergenceTracker")
-    print("")
-    print("  tracker = ConvergenceTracker(config)")
-    print("  selected, predictions = run_inference_cycle(")
-    print("      cycle=0,")
-    print("      model_path='checkpoints/cycle_0/best_model.pt',")
-    print("      oracle=oracle,")
-    print("      config=config,")
-    print("      convergence_tracker=tracker")
-    print("  )")
-    
-    print("\n" + "="*70)
+    return selected, predictions

@@ -1,6 +1,6 @@
 """
 Oracle for NEB calculations on BCC structures with vacancies.
-(DEBUG VERSION: More verbosity, stderr enabled, aggressive flushing)
+ROBUST VERSION: No stdout hijacking, clean logging, saves unrelaxed NPZ.
 """
 
 import os
@@ -13,8 +13,9 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 from pathlib import Path
-from contextlib import contextmanager
 from typing import Tuple, List, Optional
+import gc
+import warnings
 
 # ASE imports
 from ase import Atoms
@@ -22,40 +23,9 @@ from ase.io import write
 from ase.build import bulk
 from ase.mep import NEB
 from ase.optimize import FIRE
-import warnings
-import gc
 import torch
 
 warnings.filterwarnings('ignore')
-
-
-# --- LOGGING FIX: Dummy Stream ---
-class DummyStream:
-    """A stream that swallows all output but never closes."""
-    def write(self, x): pass
-    def flush(self): pass
-    def close(self): pass
-
-@contextmanager
-def suppress_output():
-    """
-    Context manager to suppress stdout ONLY.
-    We let stderr pass through so we can see if FAIRChem/Torch crashes!
-    """
-    old_stdout = sys.stdout
-    # We keep stderr active for debugging crashes
-    # old_stderr = sys.stderr 
-    
-    devnull = DummyStream()
-    
-    sys.stdout = devnull
-    # sys.stderr = devnull # DISABLED for debugging
-    try:
-        yield
-    finally:
-        sys.stdout = old_stdout
-        # sys.stderr = old_stderr
-
 
 class Oracle:
     """
@@ -68,13 +38,9 @@ class Oracle:
         self.database_dir = Path(config.database_dir)
         self.csv_path = Path(config.csv_path)
         
-        # Setup logger
-        log_file = Path(config.log_dir) / "oracle.log"
-        
-        # DEBUG: Print exact location
-        print(f"[ORACLE DEBUG] Log file location: {log_file.resolve()}")
-        
-        self.logger = self._setup_logger(log_file, config.log_level, config.log_to_console)
+        # Logging: Get logger but do not configure handlers here.
+        # This prevents conflict with the main script's logging setup.
+        self.logger = logging.getLogger("oracle")
         
         self.database_dir.mkdir(exist_ok=True, parents=True)
         self._init_csv()
@@ -83,33 +49,6 @@ class Oracle:
         self._init_calculator()
         
         self.logger.info("Oracle initialized")
-        self.logger.info(f"  Database: {self.database_dir}")
-        self.logger.info(f"  Calculator: {self.calculator_name}")
-    
-    def _setup_logger(self, log_file: Path, level: str = "INFO", also_console: bool = True):
-        """Setup logger for Oracle."""
-        logger = logging.getLogger("oracle")
-        logger.setLevel(getattr(logging, level.upper()))
-        logger.handlers = []
-        logger.propagate = False 
-        
-        log_file.parent.mkdir(parents=True, exist_ok=True)
-        
-        # File Handler
-        fh = logging.FileHandler(log_file)
-        fh.setLevel(getattr(logging, level.upper()))
-        formatter = logging.Formatter('%(asctime)s | %(levelname)-8s | %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-        fh.setFormatter(formatter)
-        logger.addHandler(fh)
-        
-        # Console Handler
-        if also_console:
-            ch = logging.StreamHandler()
-            ch.setLevel(getattr(logging, level.upper()))
-            ch.setFormatter(formatter)
-            logger.addHandler(ch)
-        
-        return logger
     
     def _init_calculator(self):
         """Initialize calculator-specific components."""
@@ -124,9 +63,9 @@ class Oracle:
             device = "cuda" if torch.cuda.is_available() else "cpu"
             self.logger.info(f"  Loading FAIRChem predictor: {self.model_name}")
             
-            with suppress_output():
-                self.predictor = pretrained_mlip.get_predict_unit(self.model_name, device=device)
-            self.logger.info(f"  ? FAIRChem predictor loaded")
+            # Load directly without suppressing output to see potential errors
+            self.predictor = pretrained_mlip.get_predict_unit(self.model_name, device=device)
+            self.logger.info(f"  FAIRChem predictor loaded")
             
         else:
             raise ValueError(f"Unknown calculator: {self.calculator_name}")
@@ -166,9 +105,13 @@ class Oracle:
     def _get_next_run_number(self, composition_string: str) -> int:
         """Get next run number for a given composition."""
         if not self.csv_path.exists(): return 1
-        df = pd.read_csv(self.csv_path)
-        comp_df = df[df['composition_string'] == composition_string]
-        return int(comp_df['run_number'].max()) + 1 if len(comp_df) > 0 else 1
+        try:
+            df = pd.read_csv(self.csv_path)
+            if 'composition_string' not in df.columns: return 1
+            comp_df = df[df['composition_string'] == composition_string]
+            return int(comp_df['run_number'].max()) + 1 if len(comp_df) > 0 else 1
+        except Exception:
+            return 1
     
     def _create_bcc_supercell(self, composition: dict):
         """Create BCC supercell with random element distribution."""
@@ -247,9 +190,9 @@ class Oracle:
         
         if self.calculator_name == "chgnet":
             from chgnet.model.dynamics import StructOptimizer
-            with suppress_output():
-                relaxer = StructOptimizer()
-                result = relaxer.relax(atoms, relax_cell=relax_cell, fmax=self.config.relax_fmax, steps=self.config.relax_max_steps, verbose=False)
+            # verbose=False suppresses output
+            relaxer = StructOptimizer()
+            result = relaxer.relax(atoms, relax_cell=relax_cell, fmax=self.config.relax_fmax, steps=self.config.relax_max_steps, verbose=False)
             
             relaxed_atoms = result['final_structure'].to_ase_atoms()
             energy = result['trajectory'].energies[-1]
@@ -267,10 +210,10 @@ class Oracle:
             else:
                 atoms_to_optimize = atoms
             
-            with suppress_output():
-                optimizer = FIRE(atoms_to_optimize, logfile=os.devnull)
-                optimizer.attach(capture_frame, interval=1)
-                optimizer.run(fmax=self.config.relax_fmax, steps=self.config.relax_max_steps)
+            # Use logfile=None to silence output without hijacking stdout
+            optimizer = FIRE(atoms_to_optimize, logfile=None)
+            optimizer.attach(capture_frame, interval=1)
+            optimizer.run(fmax=self.config.relax_fmax, steps=self.config.relax_max_steps)
             
             relaxed_atoms = atoms.copy()
             energy = atoms.get_potential_energy()
@@ -296,19 +239,19 @@ class Oracle:
         final_relaxed.calc = self._create_calculator()
         
         images = [initial_relaxed]
-        with suppress_output():
-            for i in range(1, n_images - 1):
-                image = initial_relaxed.copy()
-                fraction = i / (n_images - 1)
-                image.positions = ((1 - fraction) * initial_relaxed.positions + fraction * final_relaxed.positions)
-                image.calc = self._create_calculator()
-                images.append(image)
+        # Linear interpolation
+        for i in range(1, n_images - 1):
+            image = initial_relaxed.copy()
+            fraction = i / (n_images - 1)
+            image.positions = ((1 - fraction) * initial_relaxed.positions + fraction * final_relaxed.positions)
+            image.calc = self._create_calculator()
+            images.append(image)
         images.append(final_relaxed)
         
-        with suppress_output():
-            neb = NEB(images, k=self.config.neb_spring_constant, climb=self.config.neb_climb)
-            optimizer = FIRE(neb, logfile=os.devnull)
-            optimizer.run(fmax=self.config.neb_fmax, steps=self.config.neb_max_steps)
+        # NEB Optimization with logfile=None
+        neb = NEB(images, k=self.config.neb_spring_constant, climb=self.config.neb_climb)
+        optimizer = FIRE(neb, logfile=None)
+        optimizer.run(fmax=self.config.neb_fmax, steps=self.config.neb_max_steps)
         
         neb_time = time.time() - neb_start
         neb_energies = [img.get_potential_energy() for img in images]
@@ -331,9 +274,8 @@ class Oracle:
         comp_string = self._composition_to_string(composition)
         run_number = self._get_next_run_number(comp_string)
         
-        # LOGGING & FLUSH
-        self.logger.info(f"Calculating {comp_string} (run {run_number})...")
-        for h in self.logger.handlers: h.flush()
+        # Log less to keep main log clean, or delegate to main loop
+        # self.logger.info(f"Calculating {comp_string} (run {run_number})...")
         
         try:
             # 1-3. Create & Relax Initial (WITH Cell Relax)
@@ -368,7 +310,7 @@ class Oracle:
             b_max = getattr(self.config, 'barrier_max_cutoff', 5.0)
             
             if not (b_min <= f_barrier <= b_max and b_min <= b_barrier <= b_max):
-                self.logger.warning(f"?? REJECTED: Barriers {f_barrier:.2f}/{b_barrier:.2f} outside [{b_min}, {b_max}]")
+                self.logger.warning(f"REJECTED: Barriers {f_barrier:.2f}/{b_barrier:.2f} outside [{b_min}, {b_max}]")
                 del initial_unrelaxed, initial_relaxed, final_unrelaxed, final_relaxed
                 gc.collect()
                 return False
@@ -383,6 +325,16 @@ class Oracle:
             write(run_dir / "final_relaxed.cif", final_relaxed)
             for i, img in enumerate(images): write(run_dir / f"neb_image_{i}.cif", img)
             
+            # --- WICHTIG: Speichern der unrelaxierten NPZ Dateien (Progress=0.0) ---
+            # Das wird für die neue Inference benötigt
+            self._save_structure_as_npz(initial_unrelaxed, run_dir / "initial_unrelaxed.npz", 0.0)
+            self._save_structure_as_npz(final_unrelaxed, run_dir / "final_unrelaxed.npz", 0.0)
+            
+            # Save Standard NPZs
+            self._save_structure_as_npz(initial_relaxed, run_dir / "initial_relaxed.npz", 1.0)
+            self._save_structure_as_npz(final_relaxed, run_dir / "final_relaxed.npz", 1.0)
+            for i, img in enumerate(images): self._save_structure_as_npz(img, run_dir / f"neb_image_{i}.npz", 1.0)
+
             # Save Trajectories (Sampled)
             def save_traj(traj, prefix):
                 if not traj: return
@@ -394,11 +346,6 @@ class Oracle:
             
             save_traj(initial_traj, "initial")
             save_traj(final_traj, "final")
-            
-            # Save Standard NPZs
-            self._save_structure_as_npz(initial_relaxed, run_dir / "initial_relaxed.npz", 1.0)
-            self._save_structure_as_npz(final_relaxed, run_dir / "final_relaxed.npz", 1.0)
-            for i, img in enumerate(images): self._save_structure_as_npz(img, run_dir / f"neb_image_{i}.npz", 1.0)
             
             # JSON & CSV
             results = {
@@ -418,21 +365,18 @@ class Oracle:
                 ]
                 csv.writer(f).writerow(row)
             
-            self.logger.info(f"? Completed in {total_time:.1f}s | Barrier: {b_barrier:.3f} eV")
-            # FLUSH
-            for h in self.logger.handlers: h.flush()
-            
+            # Optional: Log success (debug level or controlled by main loop)
+            # self.logger.info(f"Completed in {total_time:.1f}s | Barrier: {b_barrier:.3f} eV")
             return True
             
         except Exception as e:
-            self.logger.error(f"? Failed: {e}")
+            self.logger.error(f"Failed {comp_string}: {e}")
             import traceback
             traceback.print_exc()
-            for h in self.logger.handlers: h.flush()
             return False
 
     def cleanup(self):
-        """Cleanup models, GPU memory AND handlers."""
+        """Cleanup models and GPU memory."""
         try: self.logger.info("Cleaning up...")
         except: pass
         
@@ -445,11 +389,6 @@ class Oracle:
             
         gc.collect()
         if torch.cuda.is_available(): torch.cuda.empty_cache()
-
-        # LOGGING FIX: Cleanly remove handlers
-        for handler in self.logger.handlers[:]:
-            handler.close()
-            self.logger.removeHandler(handler)
 
     def __enter__(self): return self
     def __exit__(self, exc_type, exc_val, exc_tb): self.cleanup(); return False

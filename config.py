@@ -24,7 +24,7 @@ class Config:
     # Only these need to be changed for different file systems
     # ============================================================
     base_database_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN_unrelaxed/databases"
-    base_production_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN_unrelaxed/MoNbTaW"
+    base_production_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN_unrelaxed/MoNbTaW/GNN_Gym"
     
     
     # ============================================================
@@ -55,7 +55,7 @@ class Config:
         self.al_results_dir = f"{self.base_production_dir}/{self.system_name}/GNN_Gym/active_learning_results"
         
         # Log directory
-        self.log_dir = f"{self.base_production_dir}/{self.system_name}/GNN_Gym/logs"
+        self.log_dir = f"{self.base_production_dir}/logs"
 
     # ============================================================
     # TRAINING MODE
