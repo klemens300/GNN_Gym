@@ -97,36 +97,37 @@ class DiffusionBarrierDataset(Dataset):
         # TRAJECTORY SAMPLING STRATEGY
         # ---------------------------------------------------------------------
         
-        # Defaults (Standard relaxed files)
-        # Use NPZ for speed if available, GraphBuilder handles fallback to CIF
-        initial_file = structure_folder / "initial_relaxed.npz"
-        final_file = structure_folder / "final_relaxed.npz"
+        # Default: Use unrelaxed structures (traj_0)
+        initial_file = structure_folder / "initial_traj_0.npz"
+        final_file = structure_folder / "final_traj_0.npz"
         
-        # In TRAINING mode, we try to load random trajectory frames
-        # This teaches the model to handle unrelaxed (KMC-like) inputs
+        # TRAINING MODE: Random trajectory sampling
         if self.mode == 'train':
-            # Look for trajectory files: initial_traj_0.npz, initial_traj_1.npz, etc.
-            # We assume naming convention from Oracle
             traj_files = list(structure_folder.glob("initial_traj_*.npz"))
             
-            if len(traj_files) > 0:
-                # Pick a random index
-                # Example: If 5 frames, pick one. 0 is unrelaxed, -1 is relaxed.
+            if len(traj_files) > 1:  # If multiple frames exist
                 n_frames = len(traj_files)
                 chosen_idx = np.random.randint(0, n_frames)
                 
-                # Construct filenames
                 initial_file = structure_folder / f"initial_traj_{chosen_idx}.npz"
-                
-                # Check if corresponding final file exists (it should)
-                # Note: We assume synchronized frames for initial/final
                 potential_final = structure_folder / f"final_traj_{chosen_idx}.npz"
                 if potential_final.exists():
                     final_file = potential_final
-                else:
-                    # Fallback to standard relaxed if final traj missing
-                    # (But keep initial trajectory frame, effectively mapping intermediate -> final)
-                    pass
+        
+        # VAL/TEST MODE: Always use traj_0 (unrelaxed)
+        # Already set above as default
+        
+        # Fallback to relaxed if traj_0 missing (legacy data)
+        if not initial_file.exists():
+            initial_file = structure_folder / "initial_relaxed.npz"
+        if not final_file.exists():
+            final_file = structure_folder / "final_relaxed.npz"
+        
+        # Fallback to CIF if NPZ missing
+        if not initial_file.exists():
+            initial_file = structure_folder / "initial_relaxed.cif"
+        if not final_file.exists():
+            final_file = structure_folder / "final_relaxed.cif"
 
         # ---------------------------------------------------------------------
         # GRAPH CONSTRUCTION

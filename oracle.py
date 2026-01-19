@@ -346,6 +346,17 @@ class Oracle:
             
             save_traj(initial_traj, "initial")
             save_traj(final_traj, "final")
+
+            # --- MOVIE SAVING (Added by upgrade script) ---
+            # Speichert alles als Animation für VESTA/Ovito
+            try:
+                if initial_traj: write(run_dir / "initial_relaxation_movie.xyz", initial_traj)
+                if final_traj:   write(run_dir / "final_relaxation_movie.xyz", final_traj)
+                if images:       write(run_dir / "neb_path_movie.xyz", images)
+            except Exception as e:
+                self.logger.warning(f"Could not save movie files: {e}")
+            # ----------------------------------------------
+
             
             # JSON & CSV
             results = {

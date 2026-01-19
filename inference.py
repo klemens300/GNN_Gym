@@ -135,21 +135,27 @@ def predict_barriers_for_test_set(
             csv_parent = Path(config.csv_path).parent
             structure_folder = csv_parent / structure_folder
         
-        # ?? CRITICAL UPDATE: Load UNRELAXED .npz files
-        initial_file = structure_folder / "initial_unrelaxed.npz"
-        final_file = structure_folder / "final_unrelaxed.npz"
+        # Load traj_0 (unrelaxed)
+        initial_file = structure_folder / "initial_traj_0.npz"
+        final_file = structure_folder / "final_traj_0.npz"
         
-        # Fallback to CIF if NPZ missing (legacy data)
-        if not initial_file.exists(): initial_file = structure_folder / "initial_unrelaxed.cif"
-        if not final_file.exists(): final_file = structure_folder / "final_unrelaxed.cif"
+        # Fallback to relaxed if traj_0 missing (legacy data)
+        if not initial_file.exists(): 
+            initial_file = structure_folder / "initial_relaxed.npz"
+        if not final_file.exists(): 
+            final_file = structure_folder / "final_relaxed.npz"
         
-        # Build graphs with forced progress=0.0 (Unrelaxed)
+        # Fallback to CIF
+        if not initial_file.exists(): 
+            initial_file = structure_folder / "initial_relaxed.cif"
+        if not final_file.exists(): 
+            final_file = structure_folder / "final_relaxed.cif"
+        
+        # Build graphs (progress will be 0.0 for traj_0)
         initial_graph, final_graph = builder.build_pair_graph(
             str(initial_file),
             str(final_file),
-            backward_barrier=oracle_barrier,
-            progress_initial=0.0,  # Force unrelaxed state
-            progress_final=0.0     # Force unrelaxed state
+            backward_barrier=oracle_barrier
         )
         
         initial_graph = initial_graph.to(device)
