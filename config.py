@@ -17,7 +17,7 @@ class Config:
     # MATERIAL SYSTEM (Elements)
     # Define elements here - all paths will be auto-generated
     # ============================================================
-    elements: List[str] = field(default_factory=lambda: ['Mo', 'Nb', 'Cr', 'V'])
+    elements: List[str] = field(default_factory=lambda: ['Mo', 'Nb', 'Ta', 'W'])
     
     # ============================================================
     # BASE DIRECTORIES
@@ -127,18 +127,18 @@ class Config:
     # ============================================================
     
     # Atom Graph (GNN Encoder)
-    gnn_hidden_dim: int = 64
+    gnn_hidden_dim: int = 128
     gnn_num_layers: int = 3
-    gnn_embedding_dim: int = 64
+    gnn_embedding_dim: int = 128
 
     # Line Graph (for bond angles)
     use_line_graph: bool = True
-    line_graph_hidden_dim: int = 64
+    line_graph_hidden_dim: int = 128
     line_graph_num_layers: int = 3
-    line_graph_embedding_dim: int = 64
+    line_graph_embedding_dim: int = 128
 
     # MLP Predictor
-    mlp_hidden_dims: List[int] = field(default_factory=lambda: [512, 256, 128])
+    mlp_hidden_dims: List[int] = field(default_factory=lambda: [1024, 512, 256, 128])
     dropout: float = 0.1
     
     # ============================================================

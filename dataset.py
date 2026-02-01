@@ -2,17 +2,14 @@
 Dataset for Diffusion Barrier Prediction.
 
 Handles loading of molecular structures and energy barriers from CSV index.
-New features:
-- Trajectory Sampling: In training mode, randomizes between unrelaxed/relaxed frames.
-- Progress Tracking: Returns relaxation progress for weighted loss.
-- Robust Filtering: Handles barriers and element types.
+FIXED: Disables GraphBuilder RAM caching by default to prevent OOM on large datasets.
 """
 
 import torch
 import numpy as np
 import pandas as pd
 from pathlib import Path
-# --- FIX: Import Subset and DataLoader ---
+# --- FIX: Import Subset and DataLoader explicitly ---
 from torch.utils.data import Dataset, DataLoader, Subset
 from graph_builder import GraphBuilder
 
@@ -69,8 +66,22 @@ class DiffusionBarrierDataset(Dataset):
             
         print(f"Dataset ({mode}) loaded: {len(self.df)} samples (filtered from {original_len})")
         
-        # Initialize Graph Builder
-        self.graph_builder = GraphBuilder(config, csv_path=csv_path, profile=False, use_cache=True)
+        # ---------------------------------------------------------------------
+        # GRAPH BUILDER INITIALIZATION (FIXED)
+        # ---------------------------------------------------------------------
+        # Disable RAM caching by default to prevent OOM on large datasets.
+        # Can be enabled via config if high-memory node is available.
+        use_cache = getattr(config, 'use_structure_cache', False)
+        
+        if use_cache:
+            print(f"??  WARNING: Structure caching ENABLED for {mode} dataset. This requires significant RAM!")
+        
+        self.graph_builder = GraphBuilder(
+            config, 
+            csv_path=csv_path, 
+            profile=False, 
+            use_cache=use_cache # Now defaults to False
+        )
         
     def __len__(self):
         return len(self.df)
@@ -155,10 +166,6 @@ class DiffusionBarrierDataset(Dataset):
         # GraphBuilder puts it in 'relax_progress' with shape [1, 1]
         progress = initial_graph.relax_progress
         
-        # Flatten for simpler handling in collate/trainer if needed, 
-        # but Trainer expects tensor for batching.
-        # Shape is [1, 1], so it's fine.
-
         return initial_graph, final_graph, barrier, progress
 
 
@@ -172,8 +179,6 @@ def create_dataloaders(config, csv_path):
        - One in 'val' mode (standard relaxed structures)
     2. Split indices randomly.
     3. Create Subsets using the split indices.
-       - Train Subset points to 'train' mode dataset
-       - Val Subset points to 'val' mode dataset
     """
     # 1. Instantiate datasets
     # Note: They share the same underlying CSV data, just behave differently
@@ -184,8 +189,6 @@ def create_dataloaders(config, csv_path):
     indices = list(range(dataset_size))
     
     # 2. Split indices
-    # Use fixed seed for reproducibility of splits if desired, 
-    # but shuffling is good for active learning.
     np.random.shuffle(indices)
     
     val_split = getattr(config, 'val_split', 0.2)
@@ -195,19 +198,10 @@ def create_dataloaders(config, csv_path):
     train_indices = indices[split:]
     
     # 3. Create Subsets
-    # This ensures train_loader gets data from the 'trajectory sampling' dataset
-    # and val_loader gets data from the 'standard' dataset, consistent with the indices.
-    # --- NOW WORKS BECAUSE Subset IS IMPORTED ---
     train_subset = Subset(train_dataset_full, train_indices)
     val_subset = Subset(val_dataset_full, val_indices)
     
     # 4. Create Loaders
-    # PyG Data objects work fine with standard torch DataLoader 
-    # (they will be collated into Batch objects automatically if using PyG > 2.0, 
-    # otherwise might need torch_geometric.loader.DataLoader. 
-    # Assuming standard PyG installation which patches torch DataLoader or provides its own)
-    
-    # Safer: try to import from torch_geometric if available, else standard
     try:
         from torch_geometric.loader import DataLoader as PyGDataLoader
         LoaderClass = PyGDataLoader
