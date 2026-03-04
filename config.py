@@ -23,8 +23,8 @@ class Config:
     # BASE DIRECTORIES
     # Only these need to be changed for different file systems
     # ============================================================
-    base_database_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN_unrelaxed/databases"
-    base_production_dir: str = "/mulfs/home/p2467946/Diffusion_barrier_GNN_unrelaxed/MoNbTaW/GNN_Gym"
+    base_database_dir: str = "/mulfs/home/p2467946/26_03_04_KMC_GNN_engine/MoNbTaW/GNN_Gym/databases"
+    base_production_dir: str = "/mulfs/home/p2467946/26_03_04_KMC_GNN_engine/MoNbTaW/GNN_Gym"
     
     
     # ============================================================
@@ -62,14 +62,6 @@ class Config:
     # ============================================================
 
     # ============================================================
-    # LMDB DATASET (Fast Loading)
-    # ============================================================
-    use_lmdb: bool = False              # Use LMDB for training (much faster!)
-    lmdb_path: str = None               # Path to LMDB (auto-generated if None)
-    rebuild_lmdb_after_cycle: bool = False  # Auto-rebuild after AL cycle
-    lmdb_num_workers_build: int = 0    # Workers for building LMDB (-1 = auto)
-
-    # ============================================================
     # BARRIER VALIDATION (Oracle)
     # ============================================================
     barrier_min_cutoff: float = 0.1    # Minimum barrier to save (eV)
@@ -90,6 +82,8 @@ class Config:
     # CRYSTAL STRUCTURE
     # ============================================================
     supercell_size: int = 4
+    # Fallback lattice parameter if Vegard's law cannot be applied
+    # (e.g. element missing bcc_lattice_parameter in atomic_properties.py)
     lattice_parameter: float = 3.2
     
     # ============================================================
@@ -98,7 +92,16 @@ class Config:
     cutoff_radius: float = 3.5
     max_neighbors: int = 50
     use_line_graph: bool = True
-    line_graph_cutoff: float = 3.5 
+    line_graph_cutoff: float = 3.5
+
+    # ============================================================
+    # RBF EDGE FEATURES
+    # Replaces scalar distances with a Gaussian basis expansion.
+    # rbf_num_gaussians determines the edge feature dimension.
+    # rbf_cutoff should match cutoff_radius.
+    # ============================================================
+    rbf_num_gaussians: int = 64
+    rbf_cutoff: float = 3.5            # Must match cutoff_radius
 
     # ============================================================
     # DATA 
@@ -132,7 +135,6 @@ class Config:
     gnn_embedding_dim: int = 128
 
     # Line Graph (for bond angles)
-    use_line_graph: bool = True
     line_graph_hidden_dim: int = 128
     line_graph_num_layers: int = 3
     line_graph_embedding_dim: int = 128
@@ -236,7 +238,7 @@ class Config:
     al_n_query: int = 2500  # Number of query samples added to training set each cycle
     
     # Active Learning Loop
-    al_query_strategy: str = 'mixed'  # ?? NEW: 'error_weighted' or 'mixed'
+    al_query_strategy: str = 'mixed'
     al_max_cycles: int = 20
     al_seed: int = 42
     al_convergence_check: bool = True
@@ -246,22 +248,10 @@ class Config:
     al_convergence_patience: int = 2000
     
     # ============================================================
-    # ACTIVE LEARNING - MIXED SAMPLING (NEW!)
+    # ACTIVE LEARNING - MIXED SAMPLING
     # ============================================================
-    # Mixed sampling combines exploitation (high-error regions) 
-    # with exploration (random sampling) to avoid getting stuck on outliers
-    
-    al_mixed_exploitation_ratio: float = 0.5  # ?? Ratio of exploitation vs exploration
-    # - 0.0 = 100% random exploration (uniform sampling)
-    # - 0.5 = 50% high-error + 50% random (BALANCED)
-    # - 0.8 = 80% high-error + 20% random (aggressive exploitation)
-    # - 1.0 = 100% error-weighted (original strategy)
-    
-    al_error_cap_multiplier: float = 3.0  # ?? Cap errors at N × median_error
-    # Prevents single outliers from dominating sampling
-    # - 2.0 = conservative (cap at 2× median)
-    # - 3.0 = balanced (recommended)
-    # - 5.0 = aggressive (allow large errors)
+    al_mixed_exploitation_ratio: float = 0.5
+    al_error_cap_multiplier: float = 3.0
     
     # ============================================================
     # LOGGING
@@ -293,7 +283,6 @@ class Config:
         mlp_str = "-".join(map(str, self.mlp_hidden_dims))
         scheduler = self.scheduler_type if self.use_scheduler else "none"
         
-        # Use system name
         parts = [timestamp, self.system_name, "barrier"]
         
         if n_samples is not None:
@@ -348,38 +337,18 @@ class Config:
         print(f"  Checkpoints: {self.checkpoint_dir}")
         print(f"  Results: {self.al_results_dir}")
         print(f"  Logs: {self.log_dir}")
+        print()
+        print("Graph Construction:")
+        print(f"  RBF Gaussians: {self.rbf_num_gaussians}")
+        print(f"  RBF Cutoff: {self.rbf_cutoff} Angstrom")
+        print(f"  Lattice parameter fallback: {self.lattice_parameter} Angstrom")
         print("="*70)
 
 
-# Display config
 if __name__ == "__main__":
     print("="*70)
     print("CONFIG TEST")
     print("="*70)
     
-    # Test 1: MoNbCrV system
-    print("\nTest 1: MoNbCrV")
-    config1 = Config(elements=['Mo', 'Nb', 'Cr', 'V'])
-    config1.print_paths()
-    
-    # Test 2: MoNbTaWTi system
-    print("\nTest 2: MoNbTaWTi")
-    config2 = Config(elements=['Mo', 'Nb', 'Ta', 'W', 'Ti'])
-    config2.print_paths()
-    
-    # Test 3: Binary system
-    print("\nTest 3: MoW")
-    config3 = Config(elements=['Mo', 'W'])
-    config3.print_paths()
-    
-    print("\nExample model names:")
-    print(f"  Cycle 0: {config1.get_model_name(n_samples=5000, cycle=0)}")
-    print(f"  Cycle 5: {config1.get_model_name(n_samples=10000, cycle=5)}")
-    print(f"  Final:   {config1.get_model_name(n_samples=25000)}")
-    
-    print("\n?? NEW: Mixed Sampling Configuration:")
-    print(f"  Strategy: {config1.al_query_strategy}")
-    print(f"  Exploitation Ratio: {config1.al_mixed_exploitation_ratio}")
-    print(f"  Error Cap Multiplier: {config1.al_error_cap_multiplier}")
-    
-    print("\n" + "="*70)
+    config = Config()
+    config.print_paths()

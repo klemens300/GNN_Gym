@@ -3,16 +3,16 @@ ALIGNN-Style GNN for Diffusion Barrier Prediction with Atom Embeddings
 
 Architecture:
 1. Atom Embeddings (learned per element type)
-2. Atom Graph Encoder (GNN)
+2. Atom Graph Encoder (GNN)  edge features are RBF-expanded distances
 3. Line Graph Encoder (for bond angles)
 4. Graph-to-Graph Message Passing
-5. Barrier Predictor (MLP) - CLEANED (No progress input)
+5. Barrier Predictor (MLP)
 
 Key features:
 - Learned embeddings instead of one-hot encoding
 - Optional atomic property concatenation
+- RBF-expanded edge features (dimension = rbf_num_gaussians)
 - Residual connections for gradient flow
-- Normalized bond-to-atom aggregation
 """
 
 import torch
@@ -103,13 +103,14 @@ class LineGraphConvLayer(MessagePassing):
 class ALIGNNEncoder(nn.Module):
     """
     ALIGNN-style encoder with atom embeddings and line graph.
+    Accepts RBF-expanded edge features (atom_edge_dim = rbf_num_gaussians).
     """
     
     def __init__(
         self,
         num_elements: int,
         atom_embedding_dim: int = 32,
-        atom_edge_dim: int = 1,
+        atom_edge_dim: int = 64,      # = rbf_num_gaussians
         line_node_dim: int = 4,
         line_edge_dim: int = 1,
         atom_hidden_dim: int = 64,
@@ -139,6 +140,7 @@ class ALIGNNEncoder(nn.Module):
         
         self.atom_node_embedding = nn.Linear(atom_input_dim, atom_hidden_dim)
         
+        # atom_edge_dim is now rbf_num_gaussians instead of 1
         self.atom_conv_layers = nn.ModuleList([
             GraphConvLayer(atom_hidden_dim, atom_edge_dim, atom_hidden_dim)
             for _ in range(atom_num_layers)
@@ -172,7 +174,7 @@ class ALIGNNEncoder(nn.Module):
     
     def forward(self, data):
         edge_index = data.edge_index
-        edge_attr = data.edge_attr
+        edge_attr = data.edge_attr   # [n_edges, rbf_num_gaussians]
         batch = data.batch if hasattr(data, 'batch') else \
                 torch.zeros(data.x_element.size(0), dtype=torch.long, device=data.x_element.device)
         
@@ -235,7 +237,6 @@ class ALIGNNEncoder(nn.Module):
 class BarrierPredictor(nn.Module):
     """
     MLP for barrier prediction from graph embeddings.
-    CLEANED: Removed relaxation progress inputs.
     """
     
     def __init__(self, embedding_dim: int = 64, hidden_dims: list = None, dropout: float = 0.1):
@@ -245,7 +246,6 @@ class BarrierPredictor(nn.Module):
             hidden_dims = [512, 256, 128]
         
         # Input: concatenation of initial, final, difference embeddings
-        # REMOVED: + 2 for progress scalars
         input_dim = 3 * embedding_dim
         
         layers = []
@@ -265,22 +265,8 @@ class BarrierPredictor(nn.Module):
         self.network = nn.Sequential(*layers)
     
     def forward(self, emb_initial, emb_final):
-        """
-        Predict barrier from structure embeddings.
-        Args:
-            emb_initial: Initial structure embedding [batch_size, embedding_dim]
-            emb_final: Final structure embedding [batch_size, embedding_dim]
-        """
-        # Compute difference embedding
         delta_emb = emb_final - emb_initial
-        
-        # Concatenate structure information only
-        combined = torch.cat([
-            emb_initial, 
-            emb_final, 
-            delta_emb
-        ], dim=1)
-        
+        combined = torch.cat([emb_initial, emb_final, delta_emb], dim=1)
         return self.network(combined)
 
 
@@ -293,7 +279,7 @@ class DiffusionBarrierModel(nn.Module):
         self,
         num_elements: int,
         atom_embedding_dim: int = 32,
-        edge_input_dim: int = 1,
+        edge_input_dim: int = 64,     # = rbf_num_gaussians
         gnn_hidden_dim: int = 64,
         gnn_num_layers: int = 5,
         gnn_embedding_dim: int = 64,
@@ -330,7 +316,7 @@ class DiffusionBarrierModel(nn.Module):
         self.encoder = ALIGNNEncoder(
             num_elements=num_elements,
             atom_embedding_dim=atom_embedding_dim,
-            atom_edge_dim=edge_input_dim,
+            atom_edge_dim=edge_input_dim,    # RBF dimension passed through
             line_node_dim=4,
             line_edge_dim=1,
             atom_hidden_dim=gnn_hidden_dim,
@@ -349,21 +335,25 @@ class DiffusionBarrierModel(nn.Module):
         )
     
     def forward(self, initial_graph, final_graph):
-        """
-        Predict barrier between initial and final structures.
-        """
         emb_initial = self.encoder(initial_graph)
         emb_final = self.encoder(final_graph)
-        
-        # Predict barrier (no progress passed)
         return self.predictor(emb_initial, emb_final)
 
 
 def create_model_from_config(config, num_elements: int):
+    """
+    Create DiffusionBarrierModel from config.
+
+    edge_input_dim is read from config.rbf_num_gaussians so that
+    the model's first conv layer matches the RBF-expanded edge features
+    produced by GraphBuilder.
+    """
+    edge_input_dim = getattr(config, 'rbf_num_gaussians', 64)
+
     return DiffusionBarrierModel(
         num_elements=num_elements,
         atom_embedding_dim=config.atom_embedding_dim,
-        edge_input_dim=1,
+        edge_input_dim=edge_input_dim,
         gnn_hidden_dim=config.gnn_hidden_dim,
         gnn_num_layers=config.gnn_num_layers,
         gnn_embedding_dim=config.gnn_embedding_dim,
@@ -374,6 +364,7 @@ def create_model_from_config(config, num_elements: int):
         line_graph_num_layers=getattr(config, 'line_graph_num_layers', 3),
         use_atomic_properties=getattr(config, 'use_atomic_properties', True)
     )
+
 
 def count_parameters(model):
     encoder_params = sum(p.numel() for p in model.encoder.parameters() if p.requires_grad)

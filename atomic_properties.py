@@ -18,7 +18,8 @@ ATOMIC_PROPERTIES = {
         'electron_affinity': 0.75,  # eV
         'melting_point': 2896.0,  # K
         'density': 10.28,  # g/cm³
-        'valence': 6
+        'valence': 6,
+        'bcc_lattice_parameter': 3.147  # Angstrom, experimental BCC lattice parameter
     },
     'Nb': {
         'atomic_number': 41,
@@ -29,7 +30,8 @@ ATOMIC_PROPERTIES = {
         'electron_affinity': 0.89,
         'melting_point': 2750.0,
         'density': 8.57,
-        'valence': 5
+        'valence': 5,
+        'bcc_lattice_parameter': 3.301
     },
     'Ta': {
         'atomic_number': 73,
@@ -40,7 +42,8 @@ ATOMIC_PROPERTIES = {
         'electron_affinity': 0.32,
         'melting_point': 3290.0,
         'density': 16.65,
-        'valence': 5
+        'valence': 5,
+        'bcc_lattice_parameter': 3.303
     },
     'W': {
         'atomic_number': 74,
@@ -51,7 +54,8 @@ ATOMIC_PROPERTIES = {
         'electron_affinity': 0.82,
         'melting_point': 3695.0,
         'density': 19.25,
-        'valence': 6
+        'valence': 6,
+        'bcc_lattice_parameter': 3.165
     },
     
     # Additional common elements
@@ -64,7 +68,8 @@ ATOMIC_PROPERTIES = {
         'electron_affinity': 0.15,
         'melting_point': 1811.0,
         'density': 7.87,
-        'valence': 3
+        'valence': 3,
+        'bcc_lattice_parameter': 2.870
     },
     'Cr': {
         'atomic_number': 24,
@@ -75,7 +80,8 @@ ATOMIC_PROPERTIES = {
         'electron_affinity': 0.67,
         'melting_point': 2180.0,
         'density': 7.19,
-        'valence': 3
+        'valence': 3,
+        'bcc_lattice_parameter': 2.884
     },
     'Ni': {
         'atomic_number': 28,
@@ -86,7 +92,8 @@ ATOMIC_PROPERTIES = {
         'electron_affinity': 1.16,
         'melting_point': 1728.0,
         'density': 8.91,
-        'valence': 2
+        'valence': 2,
+        'bcc_lattice_parameter': 2.814  # Hypothetical BCC (Ni is FCC), approximate
     },
     'Al': {
         'atomic_number': 13,
@@ -97,7 +104,8 @@ ATOMIC_PROPERTIES = {
         'electron_affinity': 0.43,
         'melting_point': 933.5,
         'density': 2.70,
-        'valence': 3
+        'valence': 3,
+        'bcc_lattice_parameter': 3.190  # Hypothetical BCC (Al is FCC), approximate
     },
     'Ti': {
         'atomic_number': 22,
@@ -108,7 +116,8 @@ ATOMIC_PROPERTIES = {
         'electron_affinity': 0.08,
         'melting_point': 1941.0,
         'density': 4.51,
-        'valence': 4
+        'valence': 4,
+        'bcc_lattice_parameter': 3.282  # BCC beta-Ti
     },
     'V': {
         'atomic_number': 23,
@@ -119,7 +128,8 @@ ATOMIC_PROPERTIES = {
         'electron_affinity': 0.53,
         'melting_point': 2183.0,
         'density': 6.11,
-        'valence': 5
+        'valence': 5,
+        'bcc_lattice_parameter': 3.028
     },
     'Zr': {
         'atomic_number': 40,
@@ -130,7 +140,8 @@ ATOMIC_PROPERTIES = {
         'electron_affinity': 0.43,
         'melting_point': 2128.0,
         'density': 6.51,
-        'valence': 4
+        'valence': 4,
+        'bcc_lattice_parameter': 3.609  # BCC beta-Zr
     },
     'Hf': {
         'atomic_number': 72,
@@ -141,7 +152,8 @@ ATOMIC_PROPERTIES = {
         'electron_affinity': 0.0,
         'melting_point': 2506.0,
         'density': 13.31,
-        'valence': 4
+        'valence': 4,
+        'bcc_lattice_parameter': 3.610  # BCC beta-Hf
     },
     'Re': {
         'atomic_number': 75,
@@ -152,7 +164,8 @@ ATOMIC_PROPERTIES = {
         'electron_affinity': 0.15,
         'melting_point': 3459.0,
         'density': 21.02,
-        'valence': 6
+        'valence': 6,
+        'bcc_lattice_parameter': 3.180  # Hypothetical BCC (Re is HCP), approximate
     },
     'O': {
         'atomic_number': 8,
@@ -163,7 +176,8 @@ ATOMIC_PROPERTIES = {
         'electron_affinity': 1.46,
         'melting_point': 54.8,
         'density': 1.43,
-        'valence': 2
+        'valence': 2,
+        'bcc_lattice_parameter': None  # Not applicable for O
     },
 }
 
@@ -193,16 +207,7 @@ def get_atomic_properties(element: str) -> dict:
     Returns:
     --------
     properties : dict
-        Dictionary with atomic properties:
-        - atomic_number: int
-        - atomic_mass: float (amu)
-        - atomic_radius: float (Angstrom)
-        - electronegativity: float (Pauling scale)
-        - first_ionization: float (eV)
-        - electron_affinity: float (eV)
-        - melting_point: float (K)
-        - density: float (g/cm³)
-        - valence: int
+        Dictionary with atomic properties
     
     Raises:
     -------
@@ -215,9 +220,8 @@ def get_atomic_properties(element: str) -> dict:
             f"Unknown element: {element}. Using default values. "
             f"Available elements: {available}"
         )
-        # Return default values
         return {
-            'atomic_number': 42,  # Mo as default
+            'atomic_number': 42,
             'atomic_mass': 95.95,
             'atomic_radius': 1.47,
             'electronegativity': 2.0,
@@ -225,10 +229,60 @@ def get_atomic_properties(element: str) -> dict:
             'electron_affinity': 0.5,
             'melting_point': 2500.0,
             'density': 10.0,
-            'valence': 5
+            'valence': 5,
+            'bcc_lattice_parameter': 3.2
         }
     
     return ATOMIC_PROPERTIES[element]
+
+
+def get_vegard_lattice_parameter(composition: dict, fallback: float = 3.2) -> float:
+    """
+    Compute Vegard's law lattice parameter for a given composition.
+
+    Linearly interpolates BCC lattice parameters weighted by atomic fraction.
+    Elements without a known BCC lattice parameter are skipped with a warning,
+    and the remaining fractions are renormalized.
+
+    Parameters:
+    -----------
+    composition : dict
+        Mapping of element symbol -> atomic fraction (fractions should sum to 1)
+    fallback : float
+        Value returned if no valid element is found (default: 3.2 Angstrom)
+
+    Returns:
+    --------
+    float
+        Vegard lattice parameter in Angstrom
+    """
+    a_mix = 0.0
+    valid_fraction_sum = 0.0
+
+    for element, fraction in composition.items():
+        props = get_atomic_properties(element)
+        a_elem = props.get('bcc_lattice_parameter')
+
+        if a_elem is None:
+            warnings.warn(
+                f"Element {element} has no BCC lattice parameter. "
+                f"Excluding from Vegard interpolation."
+            )
+            continue
+
+        a_mix += fraction * a_elem
+        valid_fraction_sum += fraction
+
+    if valid_fraction_sum < 1e-6:
+        warnings.warn(
+            f"No valid BCC lattice parameters found in composition. "
+            f"Using fallback value {fallback} Angstrom."
+        )
+        return fallback
+
+    # Renormalize in case some elements were skipped
+    a_mix /= valid_fraction_sum
+    return a_mix
 
 
 def get_element_properties(element: str) -> dict:
@@ -269,5 +323,11 @@ if __name__ == "__main__":
         print(f"\n  {elem}:")
         for key in PROPERTY_KEYS:
             print(f"    {key}: {props[key]}")
+        print(f"    bcc_lattice_parameter: {props['bcc_lattice_parameter']}")
+    
+    print("\nVegard's law test (Mo25Nb25Ta25W25):")
+    comp = {'Mo': 0.25, 'Nb': 0.25, 'Ta': 0.25, 'W': 0.25}
+    a = get_vegard_lattice_parameter(comp)
+    print(f"  a = {a:.4f} Angstrom")
     
     print("\n" + "="*70)

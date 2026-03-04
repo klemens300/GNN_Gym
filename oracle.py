@@ -38,8 +38,6 @@ class Oracle:
         self.database_dir = Path(config.database_dir)
         self.csv_path = Path(config.csv_path)
         
-        # Logging: Get logger but do not configure handlers here.
-        # This prevents conflict with the main script's logging setup.
         self.logger = logging.getLogger("oracle")
         
         self.database_dir.mkdir(exist_ok=True, parents=True)
@@ -62,8 +60,6 @@ class Oracle:
             from fairchem.core import pretrained_mlip
             device = "cuda" if torch.cuda.is_available() else "cpu"
             self.logger.info(f"  Loading FAIRChem predictor: {self.model_name}")
-            
-            # Load directly without suppressing output to see potential errors
             self.predictor = pretrained_mlip.get_predict_unit(self.model_name, device=device)
             self.logger.info(f"  FAIRChem predictor loaded")
             
@@ -114,10 +110,27 @@ class Oracle:
             return 1
     
     def _create_bcc_supercell(self, composition: dict):
-        """Create BCC supercell with random element distribution."""
+        """
+        Create BCC supercell with random element distribution.
+
+        Uses Vegard's law to estimate the lattice parameter from the
+        composition, falling back to config.lattice_parameter if no
+        BCC lattice parameters are available for the given elements.
+        """
+        from atomic_properties import get_vegard_lattice_parameter
+
         size = self.config.supercell_size
-        lattice_param = self.config.lattice_parameter
-        
+
+        # Compute composition-weighted lattice parameter via Vegard's law
+        lattice_param = get_vegard_lattice_parameter(
+            composition,
+            fallback=self.config.lattice_parameter
+        )
+        self.logger.debug(
+            f"Vegard lattice parameter for {self._composition_to_string(composition)}: "
+            f"{lattice_param:.4f} Angstrom"
+        )
+
         crystal = bulk('Fe', crystalstructure='bcc', a=lattice_param, cubic=True)
         supercell = crystal.repeat([size, size, size])
         total_atoms = len(supercell)
@@ -190,7 +203,6 @@ class Oracle:
         
         if self.calculator_name == "chgnet":
             from chgnet.model.dynamics import StructOptimizer
-            # verbose=False suppresses output
             relaxer = StructOptimizer()
             result = relaxer.relax(atoms, relax_cell=relax_cell, fmax=self.config.relax_fmax, steps=self.config.relax_max_steps, verbose=False)
             
@@ -210,7 +222,6 @@ class Oracle:
             else:
                 atoms_to_optimize = atoms
             
-            # Use logfile=None to silence output without hijacking stdout
             optimizer = FIRE(atoms_to_optimize, logfile=None)
             optimizer.attach(capture_frame, interval=1)
             optimizer.run(fmax=self.config.relax_fmax, steps=self.config.relax_max_steps)
@@ -239,7 +250,6 @@ class Oracle:
         final_relaxed.calc = self._create_calculator()
         
         images = [initial_relaxed]
-        # Linear interpolation
         for i in range(1, n_images - 1):
             image = initial_relaxed.copy()
             fraction = i / (n_images - 1)
@@ -248,7 +258,6 @@ class Oracle:
             images.append(image)
         images.append(final_relaxed)
         
-        # NEB Optimization with logfile=None
         neb = NEB(images, k=self.config.neb_spring_constant, climb=self.config.neb_climb)
         optimizer = FIRE(neb, logfile=None)
         optimizer.run(fmax=self.config.neb_fmax, steps=self.config.neb_max_steps)
@@ -274,11 +283,9 @@ class Oracle:
         comp_string = self._composition_to_string(composition)
         run_number = self._get_next_run_number(comp_string)
         
-        # Log less to keep main log clean, or delegate to main loop
-        # self.logger.info(f"Calculating {comp_string} (run {run_number})...")
-        
         try:
             # 1-3. Create & Relax Initial (WITH Cell Relax)
+            # _create_bcc_supercell now uses Vegard's law for lattice parameter
             structure = self._create_bcc_supercell(composition)
             initial_unrelaxed, center_idx, center_pos = self._create_vacancy_at_center(structure)
             initial_relaxed, E_initial, t_init, initial_traj = self._relax_structure(
@@ -286,7 +293,6 @@ class Oracle:
                 relax_cell=True
             )
             
-            # Capture relaxed cell parameters
             relaxed_cell = initial_relaxed.get_cell()
             
             # 4-5. Create Final in SAME Cell
@@ -296,7 +302,7 @@ class Oracle:
             
             final_unrelaxed = initial_unrelaxed.copy()
             final_unrelaxed.positions[chosen_neighbor] = center_pos
-            final_unrelaxed.set_cell(relaxed_cell, scale_atoms=True) # Apply relaxed cell
+            final_unrelaxed.set_cell(relaxed_cell, scale_atoms=True)
             
             # 6. Relax Final (WITHOUT Cell Relax)
             final_relaxed, E_final, t_final, final_traj = self._relax_structure(final_unrelaxed.copy(), relax_cell=False)
@@ -325,17 +331,12 @@ class Oracle:
             write(run_dir / "final_relaxed.cif", final_relaxed)
             for i, img in enumerate(images): write(run_dir / f"neb_image_{i}.cif", img)
             
-            # --- WICHTIG: Speichern der unrelaxierten NPZ Dateien (Progress=0.0) ---
-            # Das wird für die neue Inference benötigt
             self._save_structure_as_npz(initial_unrelaxed, run_dir / "initial_unrelaxed.npz", 0.0)
             self._save_structure_as_npz(final_unrelaxed, run_dir / "final_unrelaxed.npz", 0.0)
-            
-            # Save Standard NPZs
             self._save_structure_as_npz(initial_relaxed, run_dir / "initial_relaxed.npz", 1.0)
             self._save_structure_as_npz(final_relaxed, run_dir / "final_relaxed.npz", 1.0)
             for i, img in enumerate(images): self._save_structure_as_npz(img, run_dir / f"neb_image_{i}.npz", 1.0)
 
-            # Save Trajectories (Sampled)
             def save_traj(traj, prefix):
                 if not traj: return
                 n_save = 5
@@ -347,18 +348,13 @@ class Oracle:
             save_traj(initial_traj, "initial")
             save_traj(final_traj, "final")
 
-            # --- MOVIE SAVING (Added by upgrade script) ---
-            # Speichert alles als Animation für VESTA/Ovito
             try:
                 if initial_traj: write(run_dir / "initial_relaxation_movie.xyz", initial_traj)
                 if final_traj:   write(run_dir / "final_relaxation_movie.xyz", final_traj)
                 if images:       write(run_dir / "neb_path_movie.xyz", images)
             except Exception as e:
                 self.logger.warning(f"Could not save movie files: {e}")
-            # ----------------------------------------------
 
-            
-            # JSON & CSV
             results = {
                 'composition': composition, 'run_number': run_number, 'model': self.model_name,
                 'diffusing_element': diffusing_element, 'E_initial': float(E_initial), 'E_final': float(E_final),
@@ -376,8 +372,6 @@ class Oracle:
                 ]
                 csv.writer(f).writerow(row)
             
-            # Optional: Log success (debug level or controlled by main loop)
-            # self.logger.info(f"Completed in {total_time:.1f}s | Barrier: {b_barrier:.3f} eV")
             return True
             
         except Exception as e:
