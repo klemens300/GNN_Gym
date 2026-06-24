@@ -13,8 +13,8 @@ import pandas as pd
 from pathlib import Path
 from typing import List, Dict, Optional
 
-from config import Config
-from oracle import Oracle
+from gnn.config import Config
+from gnn.oracle import Oracle
 
 def generate_uniform_compositions(
     elements: List[str],

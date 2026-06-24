@@ -10,20 +10,20 @@ from pathlib import Path
 import pandas as pd
 import torch
 
-from config import Config
-from oracle import Oracle
-from fixed_test_set import create_fixed_test_set, load_test_set, generate_uniform_compositions
-from inference import (
+from gnn.config import Config
+from gnn.oracle import Oracle
+from gnn.fixed_test_set import create_fixed_test_set, load_test_set, generate_uniform_compositions
+from gnn.inference import (
     ConvergenceTracker,
     predict_barriers_for_test_set,
     select_samples_by_error,
     generate_query_compositions_from_selected
 )
-from trainer import Trainer
-from dataset import create_dataloaders
-from graph_builder import GraphBuilder
-from model import create_model_from_config
-from utils import get_node_input_dim, set_seed
+from gnn.trainer import Trainer
+from gnn.dataset import create_dataloaders
+from gnn.graph_builder import GraphBuilder
+from gnn.model import create_model_from_config
+from gnn.utils import get_node_input_dim, set_seed
 
 def setup_simple_logger(config: Config):
     logger = logging.getLogger("active_learning")

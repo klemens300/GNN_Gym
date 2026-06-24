@@ -1,0 +1,35 @@
+{
+  "elements": ["Mo", "Nb", "Ta", "W"],
+  "composition": {"Mo": 0.25, "Nb": 0.25, "Ta": 0.25, "W": 0.25},
+
+  "supercell_size": 8,
+  "lattice_parameter_A": 3.22,
+
+  "initial_state_strategy": "random",
+  "vacancy_initial_position": "center",
+
+  "temperature_K": 2000.0,
+  "attempt_frequency_Hz": 1e13,
+
+  "n_steps": 50000,
+  "t_max_sim_s": null,
+  "random_seed": 42,
+
+  "gnn_model_path": "model/mo_nb_ta_w.pt",
+  "gnn_device": "auto",
+
+  "diffusion_cache_path": "data/diffusion_cache.json",
+  "lookup_n_neighbors": 3,
+  "lookup_max_distance": 0.10,
+
+  "temperatures_K_sweep": null,
+  "n_realizations_per_T": 1,
+
+  "snapshot_every_n_steps": 500,
+  "output_dir": "runs/MoNbTaW_8x8x8_2000K",
+
+  "bicrystal_axis": "x",
+  "bicrystal_elements": ["Ta", "W"],
+  "custom_symbols": null,
+  "custom_vacancy_index": null
+}

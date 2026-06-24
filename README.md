@@ -1,580 +1,208 @@
-# Active Learning for Diffusion Barrier Prediction
+# GNN-accelerated kinetic Monte Carlo for vacancy diffusion in MoNbTaW
 
-Fast and accurate prediction of vacancy diffusion barriers in high-entropy alloys using Graph Neural Networks (GNNs) and Active Learning.
+A graph neural network (GNN) surrogate for vacancy **migration barriers** in
+body-centred-cubic (BCC) refractory high-entropy alloys, deployed inside a
+kinetic Monte Carlo (KMC) engine to reach diffusion and chemical-ordering
+time scales that are out of reach for direct first-principles simulation.
 
-> **Purpose:** This repository provides a complete Active Learning workflow to accelerate kinetic Monte Carlo (KMC) simulations by efficiently predicting diffusion barriers using a GNN surrogate model trained on CHGNet NEB calculations.
-
----
-
-## What Does This Do?
-
-**Problem:** Kinetic Monte Carlo simulations require thousands of diffusion barrier calculations. Traditional DFT or NEB calculations are too slow for high-throughput screening.
-
-**Solution:** Train a Graph Neural Network to predict diffusion barriers orders of magnitude faster than CHGNet, while maintaining high accuracy through Active Learning.
-
-### Key Concept: Active Learning Cycle
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Active Learning Loop                      │
-└─────────────────────────────────────────────────────────────┘
-
-1. Oracle (CHGNet NEB)
-   └─> Calculate diffusion barriers for compositions
-        (Slow but accurate)
-
-2. Train GNN
-   └─> Learn from Oracle data
-        (Fast surrogate model)
-
-3. Inference
-   └─> GNN predicts barriers on test set
-        (Identify prediction uncertainty)
-
-4. Query Strategy
-   └─> Select most uncertain/informative samples
-        (Error-weighted sampling)
-
-5. Back to Oracle
-   └─> Calculate selected samples, add to training data
-        (Iteratively improve model)
-
-6. Convergence Check
-   └─> Stop when MAE < threshold or max cycles reached
-        (Automatically finds optimal dataset size)
-```
+This repository is the code accompanying the paper and contains the full
+workflow: training the surrogate, running KMC with it, and recovering
+physical time scales.
 
 ---
 
-## Quick Start
+## The idea in one paragraph
 
-### Installation
+A KMC simulation of vacancy diffusion repeats one expensive step millions of
+times: map the local atomic environment around the migrating vacancy to its
+migration barrier. That mapping is a function, and a function can be learned.
+We replace the expensive evaluator recursively — density functional theory
+(DFT) for the barrier was already replaced by a universal machine-learned
+interatomic potential (uMLIP) running a nudged elastic band (NEB); here we go
+one level further and learn the **entire NEB result** with a single GNN
+forward pass. Because the barrier depends, to good approximation, on the local
+environment of the vacancy, a locality-respecting GNN learns it accurately
+from a finite dataset.
+
+The workflow has three stages:
+
+1. **Build** the surrogate — `gnn/`. Generate NEB barriers with a uMLIP
+   oracle (UMA, `uma-s-1p1`), grow the dataset by active learning, and train
+   the GNN to predict the barrier from unrelaxed endpoint structures.
+2. **Deploy** it in the KMC engine — `KMC/`. At every Bortz–Kalos–Lebowitz
+   (BKL) step the GNN evaluates the eight nearest-neighbour barriers around
+   the vacancy in one batched forward pass.
+3. **Rescale** to real time — `diffusion/`. A small number of additional
+   uMLIP supercell calculations supply the vacancy formation energy
+   `E_f^V`, the Debye attempt frequency `nu_0`, and the jump distance `a`,
+   which convert simulated KMC time into physical time.
+
+---
+
+## Repository layout
+
+```
+GNN_Gym/
+├── gnn/                # Stage 1 — GNN surrogate (training + active learning)
+│   ├── config.py             # central configuration (elements, paths, hyperparameters)
+│   ├── oracle.py             # uMLIP (UMA) NEB oracle — generates ground-truth barriers
+│   ├── graph_builder.py      # structures -> PyG graphs (RBF edges, line graph, embeddings)
+│   ├── model.py              # ALIGNN-style GNN encoder + MLP barrier head
+│   ├── dataset.py            # CSV/NPZ dataset with mixed-fidelity trajectory sampling
+│   ├── trainer.py            # training loop (early stopping, schedulers, W&B logging)
+│   ├── inference.py          # batched prediction + active-learning query strategy
+│   ├── fixed_test_set.py     # fixed evaluation set construction
+│   ├── active_learning.py    # the active-learning driver (entry point)
+│   ├── atomic_properties.py  # per-element property table + Vegard lattice parameters
+│   └── utils.py              # model I/O, seeding, prediction helpers
+│
+├── KMC/                # Stage 2 — kinetic Monte Carlo engine
+│   ├── config.py             # KMCConfig (JSON-serialisable run specification)
+│   ├── state.py              # lattice state, vacancy bookkeeping
+│   ├── engine.py             # BKL event selection + time advance
+│   ├── barrier_predictor.py  # <-- the GNN <-> KMC bridge (see below)
+│   ├── observables.py        # MSD, Warren–Cowley short-range order
+│   ├── analysis.py           # Arrhenius / tau_order fits, real-time rescaling
+│   ├── runner.py             # single ensemble + temperature-sweep drivers
+│   ├── main.py               # CLI entry point (python -m KMC.main config.json)
+│   ├── demos/                # benchmarks and illustrative scripts
+│   └── tests/                # phase-by-phase KMC test suite
+│
+├── diffusion/          # Stage 3 — real-time rescaling quantities
+│   ├── diffusion_oracle.py   # uMLIP relaxation, elastic constants, E_f^V, NEB
+│   ├── diffusion_physics.py  # D(T), Debye frequency, jump distance (pure formulae)
+│   ├── diffusion_calc.py     # composition-space sweep driver
+│   ├── results.py            # DiffusionResult dataclass
+│   └── config.py             # DiffusionConfig
+│
+├── tests/              # cross-package import + bridge smoke tests
+├── examples/           # ready-to-edit KMC run configurations
+├── pyproject.toml      # installable package definition (gnn, KMC, diffusion)
+├── environment.yml     # curated conda environment
+└── environment.lock.yml# fully pinned export for bit-for-bit reproduction
+```
+
+### How KMC and the GNN are wired together
+
+`KMC/barrier_predictor.py` is the single integration point. `GNNBarrierPredictor`
+loads the trained checkpoint and reuses the **same** `GraphBuilder`,
+`atomic_properties` table and graph hyperparameters from the `gnn` package
+that were used at training time, so the features the model sees in the KMC hot
+loop are identical to those it was trained on. The KMC engine itself only
+depends on the `BarrierPredictor` protocol (eight site indices in, eight
+barriers in eV out), so the mock and GNN backends are interchangeable. For
+performance the GNN backend caches the static BCC lattice graph once per run
+and derives the nine per-step subgraphs by edge masking instead of rebuilding
+neighbour lists every step.
+
+---
+
+## The GNN model
+
+The surrogate is an ALIGNN-style graph network mapping a (initial, final)
+structure pair to the **backward** migration barrier (the training target for
+vacancy diffusion):
+
+- **Inputs per atom:** learned element embedding + physical properties
+  (atomic number, mass, radius, electronegativity, ionization energy,
+  electron affinity, melting point, density).
+- **Edges:** distances expanded in a radial basis (64 Gaussians, cutoff
+  3.5 Å); a line graph carries bond-angle information.
+- **Encoder:** 3 message-passing layers, hidden dimension 128.
+- **Head:** MLP `[1024, 512, 256, 128]` over `[z_initial, z_final,
+  z_final − z_initial]`.
+
+Training uses a **mixed-fidelity** scheme: structures are retained at several
+relaxation stages (an unrelaxed → relaxed trajectory), all sharing the same
+converged NEB barrier label, with a progress-weighted Huber loss. This lets
+the model predict the relaxed barrier directly from **unrelaxed** inputs, so
+no relaxation is needed inside the KMC loop. Architecture defaults live in
+`gnn/config.py`.
+
+---
+
+## Installation
 
 ```bash
-# Clone repository
-git clone https://github.com/yourusername/active-learning-diffusion.git
-cd active-learning-diffusion
+# 1) Create the environment (PyTorch / PyG build must match your CUDA)
+conda env create -f environment.yml
+conda activate gnn-kmc
 
-# Install dependencies
-pip install torch torch-geometric
-pip install ase chgnet pymatgen
-pip install pandas numpy matplotlib
-pip install wandb  # Optional: for experiment tracking
+# 2) Register the packages (gnn, KMC, diffusion) as importable
+pip install -e .
+
+# 3) (optional) UMA oracle + elastic constants, only needed to GENERATE data
+pip install fairchem-core matscipy
 ```
 
-### Basic Usage
+`pip install -e .` is what makes `import gnn`, `import KMC` and
+`import diffusion` resolve from anywhere — it is required before running the
+tests or the entry points below.
 
-1. **Configure your system** in `config.py`:
-```python
-# Material system
-elements = ['Mo', 'Nb', 'Ta', 'W']  # Your alloy elements
+---
 
-# Active Learning parameters
-al_initial_samples = 1000      # Initial random samples
-al_n_query = 250               # Samples to add per cycle
-al_max_cycles = 20             # Maximum AL cycles
+## Usage
 
-# Convergence criteria
-al_convergence_threshold_mae = 0.01  # Stop when MAE < 0.01 eV
-```
+### Run KMC with a trained model
 
-2. **Run Active Learning**:
 ```bash
-jupyter notebook UT9_active_learning.ipynb
-# or
-python UT9_active_learning.ipynb  # If using jupytext
+python -m KMC.main examples/kmc_single_temperature.json   # single temperature
+python -m KMC.main examples/kmc_temperature_sweep.json    # Arrhenius sweep + ensemble
 ```
 
-3. **Monitor progress**:
-- Logs: `logs/active_learning.log`
-- Checkpoints: `checkpoints/cycle_*/best_model.pt`
-- Results: `active_learning_results/`
-- Weights & Biases: Dashboard (if enabled)
+Edit the JSON to point `gnn_model_path` at your checkpoint and set the
+composition, supercell size, temperature(s) and number of realisations. The
+config schema is `KMCConfig` in `KMC/config.py`.
+
+### Train the GNN (active learning)
+
+```bash
+python -m gnn.active_learning
+```
+
+Set the element system, dataset paths and hyperparameters in `gnn/config.py`
+first. **Note:** `gnn/config.py` ships with the cluster paths used for the
+paper (`base_database_dir`, `base_production_dir`); change these to your own
+locations before running.
+
+### Generate real-time rescaling data
+
+```bash
+python -m diffusion.diffusion_calc --step 0.10 --moving-atoms W Mo
+```
+
+Produces `E_f^V`, `nu_0` and `a` per composition for the KMC real-time
+rescaling (`KMC/analysis.py`).
 
 ---
 
-## Project Structure
+## Tests
 
+```bash
+pip install -e ".[dev]"
+pytest                       # cross-package smoke tests + KMC suite
+pytest tests/                # just the refactor import/bridge smoke tests
 ```
-.
-├── config.py                    # Central configuration
-├── UT9_active_learning.ipynb   # Main Active Learning script
-│
-├── oracle.py                    # CHGNet NEB calculator (Oracle)
-├── model.py                     # GNN architecture
-├── trainer.py                   # Training loop with early stopping
-├── inference.py                 # Prediction and query strategy
-├── dataset.py                   # Data loading and preprocessing
-│
-├── template_graph_builder.py   # Fast graph construction
-├── atomic_properties.py         # Element feature database
-├── utils.py                     # Helper functions
-│
-├── checkpoints/                 # Saved models per cycle
-├── logs/                        # Training and AL logs
-├── MoNbTaW/                     # Structure database (auto-generated)
-└── MoNbTaW.csv                  # Diffusion barrier database
-```
+
+The `tests/` suite verifies that every package imports cleanly (guarding the
+refactor) and that the KMC ↔ GNN bridge satisfies its protocol. `KMC/tests/`
+contains the detailed phase-by-phase engine tests.
 
 ---
 
-## How It Works
-
-### 1. Oracle: CHGNet NEB Calculations
-
-**Purpose:** Generate ground truth diffusion barriers.
-
-**Process:**
-- Create BCC supercell with composition (e.g., Mo₂₅Nb₂₅Ta₂₅W₂₅)
-- Create vacancy at center
-- Relax initial structure
-- Select random neighbor atom
-- Move atom to vacancy → final structure
-- Run NEB to find minimum energy path
-- Extract forward/backward barriers
-
-**Output:** Structure files (.cif) and barriers stored in database.
-
-**File:** `oracle.py`
-
-### 2. GNN Architecture
-
-**Purpose:** Learn structure-property relationship for fast prediction.
-
-**Architecture:**
-```
-Graph Neural Network (GNN)
-│
-├─ Node Features:
-│  ├─ Position (3D coordinates)
-│  ├─ Element one-hot encoding
-│  └─ Atomic properties (radius, mass, electronegativity, valence)
-│
-├─ Message Passing (5 layers):
-│  └─ GraphConvLayer with edge features (distances)
-│
-├─ Graph Pooling:
-│  └─ Global mean pooling
-│
-└─ Predictor (MLP):
-   ├─ Input: [emb_initial, emb_final, delta_emb]
-   └─ Output: Energy barrier (eV)
-```
-
-**Key Features:**
-- Template-based graph construction (100x faster)
-- Shared encoder for initial/final structures
-- Difference embedding captures transition
-
-**Files:** `model.py`, `template_graph_builder.py`
-
-### 3. Active Learning Strategy
-
-**Purpose:** Efficiently sample the most informative compositions.
-
-**Query Strategy:** Error-weighted sampling
-- Calculate prediction errors on test set
-- Sample proportional to relative error
-- High-error samples = high information gain
-
-**Convergence Criteria:**
-- MAE threshold (e.g., < 0.01 eV)
-- Patience: No improvement for N cycles
-- Maximum cycles reached
-
-**Files:** `inference.py`, `UT9_active_learning.ipynb`
-
-### 4. Training
-
-**Features:**
-- Early stopping with patience
-- Learning rate scheduling (Cosine Warm Restarts)
-- Gradient clipping
-- Checkpoint management
-- Weights & Biases integration
-
-**Metrics:**
-- Mean Absolute Error (MAE)
-- Relative MAE
-- Training/Validation loss
-
-**File:** `trainer.py`
-
----
-
-## Configuration Guide
-
-### Key Parameters in `config.py`
-
-#### Active Learning
-```python
-al_initial_samples = 1000        # Initial dataset size
-al_n_test = 500                  # Test samples per cycle
-al_n_query = 250                 # Query samples per cycle
-al_max_cycles = 20               # Maximum AL cycles
-
-# Convergence
-al_convergence_check = True
-al_convergence_metric = "mae"    # or "rel_mae"
-al_convergence_threshold_mae = 0.01  # eV
-al_convergence_patience = 5      # cycles
-```
-
-#### Model Architecture
-```python
-gnn_hidden_dim = 64              # GNN layer width
-gnn_num_layers = 5               # Message passing depth
-gnn_embedding_dim = 64           # Graph embedding size
-mlp_hidden_dims = [1024, 512, 256]  # Predictor MLP
-```
-
-#### Training
-```python
-learning_rate = 5e-4
-batch_size = 32
-epochs = 10000
-patience = 100                   # Early stopping
-
-# Final model (after convergence)
-final_model_patience = 666       # Higher patience for final training
-```
-
-#### NEB Calculation
-```python
-neb_images = 3                   # NEB path resolution
-neb_fmax = 0.1                   # Force convergence (eV/Å)
-neb_max_steps = 500              # Maximum steps
-```
-
----
-
-## Output Files
-
-### Database
-- **`MoNbTaW.csv`**: Central database with all calculated barriers
-  - Columns: composition, barriers, energies, timings, paths
-
-### Structures
-- **`MoNbTaW/`**: Directory tree organized by composition and run
-  ```
-  MoNbTaW/
-  ├── Mo25Nb25Ta25W25/
-  │   ├── run_1/
-  │   │   ├── initial_relaxed.cif
-  │   │   ├── final_relaxed.cif
-  │   │   ├── neb_image_*.cif
-  │   │   └── results.json
-  │   └── run_2/
-  └── Mo30Nb20Ta20W30/
-  ```
-
-### Models
-- **`checkpoints/cycle_*/best_model.pt`**: Model for each AL cycle
-- **`checkpoints/final_model/best_model.pt`**: Final optimized model
-
-### Results
-- **`active_learning_results/`**:
-  - `cycle_*_predictions.csv`: Predictions for each cycle
-  - `convergence_history.json`: AL convergence metrics
-
-### Logs
-- **`logs/active_learning.log`**: Main AL loop
-- **`logs/oracle.log`**: NEB calculations
-- **`logs/inference_cycle_*.log`**: Per-cycle inference
-- **`checkpoints/cycle_*/training.log`**: Training logs
-
----
-
-## Example Workflow
-
-### Scenario: Screen Mo-Nb-Ta-W system for diffusion barriers
-
-```python
-# 1. Configure in config.py
-elements = ['Mo', 'Nb', 'Ta', 'W']
-al_initial_samples = 1000
-al_n_query = 250
-al_convergence_threshold_mae = 0.01  # eV
-
-# 2. Run Active Learning
-# Execute: UT9_active_learning.ipynb
-
-# 3. Monitor
-# - Watch logs/active_learning.log for progress
-# - Check convergence in active_learning_results/
-
-# 4. Results
-# - Cycle 0: 1000 samples, MAE = 0.15 eV
-# - Cycle 1: 1250 samples, MAE = 0.08 eV
-# - Cycle 2: 1500 samples, MAE = 0.04 eV
-# - Cycle 3: 1750 samples, MAE = 0.02 eV
-# - Cycle 4: 2000 samples, MAE = 0.009 eV ✓ CONVERGED
-
-# 5. Use final model
-model = load_model_for_inference('checkpoints/final_model/best_model.pt')
-barrier = predict_single(model, initial_graph, final_graph)
-```
-
----
-
-## Advanced Usage
-
-### Custom Element Systems
-
-```python
-# In config.py
-elements = ['Ti', 'Zr', 'Hf', 'V', 'Nb']  # Your elements
-
-# Add atomic properties in atomic_properties.py
-ATOMIC_PROPERTIES = {
-    'Ti': {
-        'atomic_radius': 1.76,
-        'atomic_mass': 47.867,
-        'electronegativity': 1.54,
-        'valence': 4
-    },
-    # ... add your elements
-}
-```
-
-### Using Trained Models for Prediction
-
-```python
-from utils import load_model_for_inference, predict_single
-from template_graph_builder import TemplateGraphBuilder
-from config import Config
-
-# Load model
-config = Config()
-model, checkpoint = load_model_for_inference(
-    'checkpoints/final_model/best_model.pt',
-    config
-)
-
-# Build graphs for prediction
-builder = TemplateGraphBuilder(config)
-initial_graph, final_graph = builder.build_pair_graph(
-    'path/to/initial.cif',
-    'path/to/final.cif',
-    backward_barrier=0.0  # Dummy value for prediction
-)
-
-# Predict barrier
-barrier = predict_single(model, initial_graph, final_graph, device='cuda')
-print(f"Predicted barrier: {barrier:.3f} eV")
-```
-
-### Batch Predictions
-
-```python
-from utils import predict_batch
-
-# Predict multiple barriers
-barriers = predict_batch(
-    model,
-    initial_graphs,  # List of graphs
-    final_graphs,    # List of graphs
-    device='cuda',
-    batch_size=64
-)
-```
-
----
-
-## Monitoring with Weights & Biases
-
-Enable experiment tracking:
-
-```python
-# In config.py
-use_wandb = True
-wandb_project = "diffusion-barriers"
-wandb_entity = "your-username"  # Optional
-```
-
-**Tracked Metrics:**
-- Training/Validation loss and MAE
-- Learning rate schedule
-- Patience counter
-- Best metrics per cycle
-- Dataset size growth
-
----
-
-## Troubleshooting
-
-### Common Issues
-
-**1. CUDA out of memory**
-```python
-# Reduce batch size in config.py
-batch_size = 16  # or smaller
-```
-
-**2. Convergence too slow**
-```python
-# Increase query samples per cycle
-al_n_query = 500  # More samples per cycle
-
-# Or relax convergence threshold
-al_convergence_threshold_mae = 0.02  # Less strict
-```
-
-**3. NEB calculations failing**
-```python
-# Increase NEB steps
-neb_max_steps = 1000
-
-# Or relax force convergence
-neb_fmax = 0.2
-```
-
-**4. Model not improving**
-```python
-# Increase model capacity
-gnn_num_layers = 7
-mlp_hidden_dims = [2048, 1024, 512, 256]
-
-# Or use different scheduler
-scheduler_type = "cosine_warm_restarts"
-scheduler_t_0 = 100
-```
-
----
-
-## File Format Reference
-
-### Database CSV (`MoNbTaW.csv`)
-
-```csv
-composition_string,Mo,Nb,Ta,W,run_number,calculator,model,diffusing_element,forward_barrier_eV,backward_barrier_eV,E_initial_eV,E_final_eV,initial_relax_time_s,final_relax_time_s,neb_time_s,total_time_s,structure_folder,timestamp
-Mo25Nb25Ta25W25,0.25,0.25,0.25,0.25,1,CHGNet,CHGNet-pretrained,W,1.234,0.987,-1234.56,-1233.57,12.3,11.8,45.2,69.3,MoNbTaW/Mo25Nb25Ta25W25/run_1,2024-01-01 12:00:00
-```
-
-### Model Checkpoint
-
-```python
-checkpoint = {
-    'model_state_dict': ...,
-    'optimizer_state_dict': ...,
-    'epoch': 150,
-    'best_val_mae': 0.0234,
-    'best_val_rel_mae': 0.0456,
-    'history': {...},
-    'config': {...},
-    'cycle': 3
-}
-```
-
----
-
-## Dependencies
-
-### Required
-- **PyTorch** (≥ 2.0): Neural network framework
-- **PyTorch Geometric**: Graph neural network library
-- **ASE**: Atomic structure manipulation
-- **CHGNet**: Machine learning interatomic potential
-- **pymatgen**: Materials analysis
-- **pandas**: Data management
-- **numpy**: Numerical computing
-
-### Optional
-- **wandb**: Experiment tracking
-- **matplotlib**: Visualization
-- **jupyter**: Interactive notebook
-
----
-
-## Tips for Best Results
-
-1. **Start small**: Begin with `al_initial_samples = 500-1000` to verify setup
-
-2. **Monitor convergence**: Check `logs/active_learning.log` regularly
-
-3. **Adjust query size**: Balance between speed and data efficiency
-   - Small query (50-100): More cycles, finer control
-   - Large query (500-1000): Fewer cycles, faster completion
-
-4. **Use GPU**: Essential for reasonable training times
-   ```python
-   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-   ```
-
-5. **Checkpoint often**: Models are saved automatically per cycle
-
-6. **Validate final model**: Test on held-out compositions before KMC
-
----
-
-## Code Overview
-
-### Core Modules
-
-| Module | Purpose | Key Functions |
-|--------|---------|---------------|
-| `config.py` | Configuration management | `Config` class |
-| `oracle.py` | CHGNet NEB calculations | `Oracle.calculate()` |
-| `model.py` | GNN architecture | `DiffusionBarrierModel` |
-| `trainer.py` | Training loop | `Trainer.train()` |
-| `inference.py` | Prediction & query | `run_inference_cycle()` |
-| `dataset.py` | Data loading | `create_dataloaders()` |
-| `template_graph_builder.py` | Graph construction | `TemplateGraphBuilder` |
-| `utils.py` | Helper functions | `load_model_for_inference()` |
-
-### Data Flow
-
-```
-CSV Database (MoNbTaW.csv)
-    ↓
-Dataset (dataset.py)
-    ↓
-DataLoader (batched graphs)
-    ↓
-GNN Model (model.py)
-    ↓
-Predictions
-    ↓
-Query Strategy (inference.py)
-    ↓
-Oracle (oracle.py)
-    ↓
-Back to CSV Database
-```
-
----
-
-## Contributing
-
-This repository serves as supplementary information for a research paper. For questions or issues:
-
-1. Check the troubleshooting section
-2. Review logs for error messages
-3. Verify configuration in `config.py`
+## Reproducibility note
+
+`environment.yml` is a curated, human-readable specification. The exact,
+fully pinned environment used to produce the paper results (including the
+specific PyTorch / CUDA build) is preserved in `environment.lock.yml`.
 
 ---
 
 ## License
 
-[Add your license here]
+MIT — see [LICENSE](LICENSE).
 
----
+## Citation
 
-## Acknowledgments
-
-**Tools:**
-- [CHGNet](https://github.com/CederGroupHub/chgnet): Machine learning interatomic potential
-- [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/): Graph neural networks
-- [ASE](https://wiki.fysik.dtu.dk/ase/): Atomic Simulation Environment
-
----
-
-## Contact
-
-[Your contact information or link to paper]
-
----
-
-**Last Updated:** [Date]
-
-**Repository:** Supplementary material for [Paper Title/DOI]
+If you use this code, please cite the accompanying paper (citation to be added
+on publication).

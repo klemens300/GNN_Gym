@@ -1,22 +1,46 @@
-data/
-neb_database/
-*.cif
-*.csv
-checkpoints/
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# ---- Models / checkpoints ----
 *.pt
 *.pth
-results/
-__pycache__/
-.gitignore
+checkpoints/
+
+# ---- Generated data & structures ----
+data/
 database/
-old/
-*.json
-wandb/
-logs/
+neb_database/
+results/
 active_learning_results/
+runs/
+logs/
+old/
+*.cif
+*.csv
+*.extxyz
+*.traj
+
+# ---- Diffusion / KMC caches & large run artifacts ----
+diffusion_cache.json
+*.err
+*.out
+
+# ---- Experiment tracking ----
+wandb/
+
+# ---- System-specific structure databases (auto-generated) ----
 MoNbTaW/
 MoNbTaW.csv
 MoNbTaWCr/
 MoNbTaWCr.csv
-*.err
-*.out
+
+# ---- Keep example configs even though *.json / *.csv are ignored above ----
+!examples/
+!examples/**

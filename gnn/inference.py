@@ -11,10 +11,10 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
-from config import Config
-from oracle import Oracle
-from utils import load_model_for_inference
-from graph_builder import GraphBuilder
+from gnn.config import Config
+from gnn.oracle import Oracle
+from gnn.utils import load_model_for_inference
+from gnn.graph_builder import GraphBuilder
 
 def cleanup_gpu():
     if torch.cuda.is_available(): torch.cuda.empty_cache()

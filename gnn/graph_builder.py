@@ -19,7 +19,7 @@ from typing import Tuple, Dict, List, Optional
 import warnings
 import time
 
-from atomic_properties import get_atomic_properties
+from gnn.atomic_properties import get_atomic_properties
 
 
 def rbf_expansion(distances: np.ndarray, n_gaussians: int, cutoff: float) -> np.ndarray:
@@ -372,51 +372,57 @@ class GraphBuilder:
             'edge_attr': line_edge_attr
         }
     
-    def cif_to_graph(
+    def atoms_to_graph(
         self,
-        cif_path: str,
+        atoms: Atoms,
         backward_barrier: float = None,
-        progress_override: Optional[float] = None
+        progress_override: Optional[float] = None,
+        timing_label: Optional[str] = None
     ) -> Data:
         """
-        Build PyG graph from CIF/NPZ file with atom embeddings and RBF edges.
-        
+        Build PyG graph from an in-memory ASE Atoms object.
+
+        This is the core graph-building logic and contains no file I/O.
+        Used directly by KMC (no disk roundtrip per move) and indirectly by
+        cif_to_graph (which reads the structure first and then delegates here).
+
         Args:
-            cif_path: Path to CIF or NPZ file
-            backward_barrier: Target barrier value (optional)
-            progress_override: Force progress value (0.0 to 1.0)
-        
+            atoms: ASE Atoms object. Positions, chemical symbols, cell and pbc
+                are read directly. atoms.info['relax_progress'] is consulted
+                if progress_override is None.
+            backward_barrier: Target barrier value (optional, attached as data.y).
+            progress_override: Force the relax_progress scalar in [0, 1]. If
+                None, falls back to atoms.info.get('relax_progress', 1.0).
+            timing_label: Optional label printed in profiling output to help
+                identify the source of the structure (e.g. file name).
+
         Returns:
             PyG Data object. edge_attr has shape [n_edges, rbf_num_gaussians].
         """
         if self.profile:
             t_total = time.time()
             t0 = time.time()
-        
-        atoms = self._read_structure_from_file(cif_path)
-        
+
+        # Resolve relaxation progress scalar
         if progress_override is not None:
             progress = float(progress_override)
         else:
             progress = atoms.info.get('relax_progress', 1.0)
-            
-        if self.profile:
-            t_read = time.time() - t0
-            t0 = time.time()
-        
+
+        # Node features: element indices and (optional) atomic properties
         elements = atoms.get_chemical_symbols()
         n_atoms = len(atoms)
-        
+
         element_indices = []
         atomic_props_list = []
-        
+
         for element in elements:
             if element in self.element_to_idx:
                 element_indices.append(self.element_to_idx[element])
             else:
                 warnings.warn(f"Unknown element {element}, using index 0")
                 element_indices.append(0)
-            
+
             if self.use_atomic_properties:
                 props = get_atomic_properties(element)
                 atomic_props_list.append([
@@ -429,50 +435,49 @@ class GraphBuilder:
                     props['melting_point'],
                     props['density']
                 ])
-        
+
         x_element = torch.LongTensor(element_indices)
-        
+
         if self.use_atomic_properties:
             x_props = torch.FloatTensor(atomic_props_list)
         else:
             x_props = None
-        
+
         if self.profile:
             t_features = time.time() - t0
             t0 = time.time()
-        
-        # edge_attr is now [n_edges, rbf_num_gaussians] instead of [n_edges, 1]
+
+        # edge_attr is [n_edges, rbf_num_gaussians] (RBF-expanded distances)
         edge_index, edge_attr, edge_vectors = self._compute_edges_from_positions(
             atoms, self.cutoff_radius
         )
-        
+
         if self.profile:
             t_edges = time.time() - t0
             t0 = time.time()
-        
+
+        # Line graph (bond-bond angles) if enabled
         if self.use_line_graph:
             line_graph = self._build_line_graph_from_vectors(edge_index, edge_vectors)
             line_graph_batch_mapping = edge_index[0].clone()
         else:
             line_graph = None
             line_graph_batch_mapping = None
-        
+
         if self.profile:
             t_line = time.time() - t0
             t_total = time.time() - t_total
-            
-            npz_path = Path(cif_path).with_suffix('.npz')
-            format_used = "NPZ" if npz_path.exists() else "CIF"
-            
-            print(f"Graph build timing ({Path(cif_path).name}) [{format_used}]:")
-            print(f"  File reading:   {t_read*1000:6.2f} ms ({t_read/t_total*100:4.1f}%)")
+
+            label = timing_label if timing_label else f"atoms({n_atoms})"
+            print(f"Graph build timing ({label}):")
             print(f"  Node features:  {t_features*1000:6.2f} ms ({t_features/t_total*100:4.1f}%)")
             print(f"  Edge compute:   {t_edges*1000:6.2f} ms ({t_edges/t_total*100:4.1f}%)")
             if self.use_line_graph:
                 print(f"  Line graph:     {t_line*1000:6.2f} ms ({t_line/t_total*100:4.1f}%)")
             print(f"  TOTAL:          {t_total*1000:6.2f} ms")
             print(f"  Edge feature shape: {edge_attr.shape}")
-        
+
+        # Assemble PyG Data object
         data = Data(
             x_element=x_element,
             edge_index=edge_index,
@@ -480,20 +485,58 @@ class GraphBuilder:
             num_nodes=n_atoms,
             relax_progress=torch.tensor([[progress]], dtype=torch.float32)
         )
-        
+
         if x_props is not None:
             data.x_props = x_props
-        
+
         if line_graph is not None:
             data.line_graph_x = line_graph['node_features']
             data.line_graph_edge_index = line_graph['edge_index']
             data.line_graph_edge_attr = line_graph['edge_attr']
             data.line_graph_batch_mapping = line_graph_batch_mapping
-        
+
         if backward_barrier is not None:
             data.y = torch.tensor([backward_barrier], dtype=torch.float32)
-        
+
         return data
+
+    def cif_to_graph(
+        self,
+        cif_path: str,
+        backward_barrier: float = None,
+        progress_override: Optional[float] = None
+    ) -> Data:
+        """
+        Build PyG graph from CIF/NPZ file with atom embeddings and RBF edges.
+
+        Thin wrapper around atoms_to_graph: reads the structure from disk
+        (with optional NPZ caching) and delegates the graph construction.
+
+        Args:
+            cif_path: Path to CIF or NPZ file.
+            backward_barrier: Target barrier value (optional).
+            progress_override: Force progress value (0.0 to 1.0).
+
+        Returns:
+            PyG Data object. edge_attr has shape [n_edges, rbf_num_gaussians].
+        """
+        if self.profile:
+            t_read_start = time.time()
+
+        atoms = self._read_structure_from_file(cif_path)
+
+        if self.profile:
+            t_read = time.time() - t_read_start
+            npz_path = Path(cif_path).with_suffix('.npz')
+            format_used = "NPZ" if npz_path.exists() else "CIF"
+            print(f"  File reading:   {t_read*1000:6.2f} ms [{format_used}] ({Path(cif_path).name})")
+
+        return self.atoms_to_graph(
+            atoms,
+            backward_barrier=backward_barrier,
+            progress_override=progress_override,
+            timing_label=Path(cif_path).name
+        )
     
     def build_pair_graph(
         self,

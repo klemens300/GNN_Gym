@@ -11,7 +11,7 @@ import pandas as pd
 from pathlib import Path
 # --- FIX: Import Subset and DataLoader explicitly ---
 from torch.utils.data import Dataset, DataLoader, Subset
-from graph_builder import GraphBuilder
+from gnn.graph_builder import GraphBuilder
 
 class DiffusionBarrierDataset(Dataset):
     """

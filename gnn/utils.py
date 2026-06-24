@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import List, Tuple, Optional
 from torch_geometric.data import Batch
 
-from model import create_model_from_config, count_parameters
+from gnn.model import create_model_from_config, count_parameters
 
 
 def set_seed(seed: int = 42):
@@ -157,7 +157,7 @@ def load_model_for_inference(filepath: str, config, validate: bool = False):
     print(f"Loading model from: {filepath}")
     
     # Get number of elements from Config
-    from graph_builder import GraphBuilder
+    from gnn.graph_builder import GraphBuilder
     builder = GraphBuilder(config)
     num_elements = len(builder.elements)
     
@@ -341,8 +341,8 @@ def print_model_info(model, checkpoint: dict = None):
 
 
 if __name__ == "__main__":
-    from config import Config
-    from graph_builder import GraphBuilder
+    from gnn.config import Config
+    from gnn.graph_builder import GraphBuilder
     
     print("="*70)
     print("UTILS MODULE (ATOM EMBEDDINGS)")

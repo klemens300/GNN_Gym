@@ -117,7 +117,7 @@ class Oracle:
         composition, falling back to config.lattice_parameter if no
         BCC lattice parameters are available for the given elements.
         """
-        from atomic_properties import get_vegard_lattice_parameter
+        from gnn.atomic_properties import get_vegard_lattice_parameter
 
         size = self.config.supercell_size
 
@@ -399,6 +399,6 @@ class Oracle:
     def __exit__(self, exc_type, exc_val, exc_tb): self.cleanup(); return False
 
 if __name__ == "__main__":
-    from config import Config
+    from gnn.config import Config
     print("ORACLE INITIALIZED")
     Oracle(Config())

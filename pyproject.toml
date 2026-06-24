@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gnn-kmc-monbtaw"
+version = "0.1.0"
+description = "GNN surrogate for vacancy migration barriers and kinetic Monte Carlo for the MoNbTaW refractory high-entropy alloy"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Klemens Lechner" }]
+keywords = [
+    "graph neural network",
+    "kinetic Monte Carlo",
+    "high-entropy alloy",
+    "vacancy diffusion",
+    "migration barrier",
+    "MoNbTaW",
+]
+
+# Core dependencies are intentionally light so that `pip install -e .` only
+# registers the three packages (gnn, KMC, diffusion) as importable. The heavy
+# scientific stack (PyTorch, PyTorch Geometric, ASE, FairChem) is reproduced
+# via environment.yml; install that first, then `pip install -e .`.
+dependencies = [
+    "numpy",
+    "pandas",
+    "scipy",
+]
+
+[project.optional-dependencies]
+# GNN training/inference and KMC barrier prediction
+gnn = ["torch", "torch_geometric", "ase"]
+# uMLIP (UMA) NEB oracle and elastic-constant / diffusion calculations
+oracle = ["fairchem-core", "matscipy"]
+# Experiment tracking, plotting, metrics
+extras = ["wandb", "matplotlib", "scikit-learn"]
+# Test suite
+dev = ["pytest"]
+
+[project.urls]
+Repository = "https://github.com/klemens300/GNN_Gym"
+
+[tool.setuptools.packages.find]
+include = ["gnn*", "KMC*", "diffusion*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "KMC/tests"]
+python_files = ["test_*.py"]
