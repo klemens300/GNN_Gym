@@ -9,6 +9,10 @@ This repository is the code accompanying the paper and contains the full
 workflow: training the surrogate, running KMC with it, and recovering
 physical time scales.
 
+> Loading this repo into an AI assistant? See [`AGENTS.md`](AGENTS.md) for a
+> task-oriented map of the code, exact entry-point commands, and the critical
+> conventions an assistant needs to give correct guidance.
+
 ---
 
 ## The idea in one paragraph
@@ -77,6 +81,7 @@ GNN_Gym/
 │
 ├── tests/              # cross-package import + bridge smoke tests
 ├── examples/           # ready-to-edit KMC run configurations
+├── AGENTS.md           # orientation file for AI assistants (task cookbook + gotchas)
 ├── pyproject.toml      # installable package definition (gnn, KMC, diffusion)
 ├── environment.yml     # curated conda environment
 └── environment.lock.yml# fully pinned export for bit-for-bit reproduction
