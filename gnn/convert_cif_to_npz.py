@@ -227,7 +227,7 @@ def benchmark_loading_speed(csv_path: str, n_samples: int = 20):
 
 if __name__ == "__main__":
     # Configuration
-    csv_path = "/home/klemens/databases/MoNbTaW.csv"
+    csv_path = "data/databases/MoNbTaW.csv"
     
     print("\n🚀 Starting CIF to NPZ conversion...")
     print(f"   Database: {csv_path}")

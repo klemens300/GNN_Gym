@@ -7,7 +7,7 @@ Verifies that the GNN-backed predictor:
 - Is a true drop-in replacement for MockBarrierPredictor (BKL step works)
 - Returns barriers in a physically reasonable range (~0.5-3 eV for MoNbTaW)
 
-Run from /home/klemens/doctor/gnn_kmc/scipts:
+Run from /path/to/GNN_Gym:
 
     pytest -v KMC/tests/test_phase3.py
 

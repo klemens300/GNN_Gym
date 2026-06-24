@@ -1,7 +1,7 @@
 """
 Phase-5b tests: DiffusionLookup + rescale_to_real_time.
 
-Run from /home/klemens/doctor/gnn_kmc/scipts:
+Run from /path/to/GNN_Gym:
 
     pytest -v KMC/tests/test_phase5b.py
 """

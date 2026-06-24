@@ -3,7 +3,7 @@ Diagnostic v2: pin down where the time-averaged MSD plateaus, and check
 whether the unfolded vacancy trajectory has a systematic drift.
 
 Run:
-    cd /home/klemens/doctor/gnn_kmc/scipts/KMC/tests
+    cd /path/to/GNN_Gym/KMC/tests
     python debug_msd.py
 """
 

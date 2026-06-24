@@ -3,7 +3,7 @@ Tests for the multi-slab initial-state strategy.
 
 Run from anywhere with pytest:
 
-    cd /home/klemens/doctor/gnn_kmc/scipts
+    cd /path/to/GNN_Gym
     pytest -v KMC/tests/test_slabs.py
 """
 

@@ -2,7 +2,7 @@
 Phase-5c tests: Arrhenius fit, tau_order fit, KMCConfig JSON roundtrip,
 run_temperature_sweep, and main.py end-to-end smoke test (Mock predictor).
 
-Run from /home/klemens/doctor/gnn_kmc/scipts:
+Run from /path/to/GNN_Gym:
 
     pytest -v KMC/tests/test_phase5c.py
 """

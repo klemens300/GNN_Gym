@@ -5,7 +5,7 @@ is in PyG's Batch.from_data_list (likely the line_graph_edge_index increment).
 If single-graph embeddings already disagree, the issue is in the graph data
 itself (something we missed in the topology comparison).
 
-Run from /home/klemens/doctor/gnn_kmc/scipts:
+Run from /path/to/GNN_Gym:
     python -m KMC.demos.debug_encoder_per_graph
 """
 

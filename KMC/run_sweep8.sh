@@ -5,7 +5,7 @@
 #
 # Usage (recommended via tmux):
 #     tmux new -d -s kmc8 \
-#         "/home/klechner/doctor/gnn_kmc/scipts/KMC/run_sweep8.sh"
+#         "/path/to/GNN_Gym/KMC/run_sweep8.sh"
 #     tmux attach -t kmc8
 
 set -u
@@ -17,7 +17,7 @@ set -u
 #   RuntimeError: CUDA driver error: operation not supported
 export PYTORCH_CUDA_ALLOC_CONF=
 
-REPO="/home/klechner/doctor/gnn_kmc"
+REPO="/path/to/GNN_Gym"
 WRAPPER="${REPO}/scipts/KMC/run_until_done.sh"
 SESSION_STEPS=5000
 MAX_RESTARTS=500

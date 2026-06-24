@@ -3,11 +3,11 @@ Phase-2 sanity tests for the KMC engine: full trajectory + analytical
 verification of the BKL machinery.
 
 Run:
-    cd /home/klemens/doctor/gnn_kmc/scipts
+    cd /path/to/GNN_Gym
     pytest -v KMC/tests/test_phase2.py
 
 Or directly:
-    cd /home/klemens/doctor/gnn_kmc/scipts/KMC/tests
+    cd /path/to/GNN_Gym/KMC/tests
     python test_phase2.py
 """
 

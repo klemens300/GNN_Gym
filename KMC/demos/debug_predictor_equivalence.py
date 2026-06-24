@@ -1,6 +1,6 @@
 """Debug: compare legacy vs fast predictor graphs side-by-side.
 
-Run from /home/klemens/doctor/gnn_kmc/scipts:
+Run from /path/to/GNN_Gym:
     python -m KMC.demos.debug_predictor_equivalence
 """
 

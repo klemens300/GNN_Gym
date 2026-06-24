@@ -5,7 +5,7 @@ Measures wall-clock per BKL step on a fixed random state, comparing:
   - GNNBarrierPredictor(use_static_cache=False)  (legacy per-step rebuild)
   - GNNBarrierPredictor(use_static_cache=True)   (Phase-6 fast path)
 
-Run from /home/klemens/doctor/gnn_kmc/scipts:
+Run from /path/to/GNN_Gym:
 
     python -m KMC.demos.benchmark_predictor
     python -m KMC.demos.benchmark_predictor --supercells 4,6,8 --warmup 5 --measure 30

@@ -23,8 +23,8 @@ class Config:
     # BASE DIRECTORIES
     # Only these need to be changed for different file systems
     # ============================================================
-    base_database_dir: str = "/mulfs/home/p2467946/26_03_04_KMC_GNN_engine/MoNbTaW/GNN_Gym/databases"
-    base_production_dir: str = "/mulfs/home/p2467946/26_03_04_KMC_GNN_engine/MoNbTaW/GNN_Gym"
+    base_database_dir: str = "data/databases"
+    base_production_dir: str = "data"
     
     
     # ============================================================

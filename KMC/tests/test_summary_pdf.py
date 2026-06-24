@@ -12,7 +12,7 @@ varies across versions. The tests assert:
 
 Run from anywhere with pytest:
 
-    cd /home/klemens/doctor/gnn_kmc/scipts
+    cd /path/to/GNN_Gym
     pytest -v KMC/tests/test_summary_pdf.py
 """
 

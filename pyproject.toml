@@ -9,7 +9,7 @@ description = "GNN surrogate for vacancy migration barriers and kinetic Monte Ca
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "Klemens Lechner" }]
+authors = [{ name = "GNN_Gym authors" }]
 keywords = [
     "graph neural network",
     "kinetic Monte Carlo",
@@ -38,9 +38,6 @@ oracle = ["fairchem-core", "matscipy"]
 extras = ["wandb", "matplotlib", "scikit-learn"]
 # Test suite
 dev = ["pytest"]
-
-[project.urls]
-Repository = "https://github.com/klemens300/GNN_Gym"
 
 [tool.setuptools.packages.find]
 include = ["gnn*", "KMC*", "diffusion*"]

@@ -3,12 +3,12 @@ Phase-1 sanity tests for the KMC engine.
 
 Run from anywhere with pytest:
 
-    cd /home/klemens/doctor/gnn_kmc/scipts
+    cd /path/to/GNN_Gym
     pytest -v KMC/tests/test_phase1.py
 
 Or directly as a script (also runs pytest internally):
 
-    cd /home/klemens/doctor/gnn_kmc/scipts/KMC/tests
+    cd /path/to/GNN_Gym/KMC/tests
     python test_phase1.py
 """
 

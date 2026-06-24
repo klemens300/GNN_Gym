@@ -7,7 +7,7 @@ outputs from those checkpoints. We only assert that the expected files
 exist and are non-trivial in size; the format-level correctness of the
 CSVs / PDF / ExtXYZ is covered by the dedicated tests for each writer.
 
-Run from /home/klemens/doctor/gnn_kmc/scipts:
+Run from /path/to/GNN_Gym:
 
     pytest -v KMC/tests/test_process_checkpoint.py
 """

@@ -5,12 +5,12 @@
 #
 # Usage (recommended via tmux):
 #     tmux new -d -s kmc10 \
-#         "/home/klechner/doctor/gnn_kmc/scipts/KMC/run_10cube_T_sweep.sh"
+#         "/path/to/GNN_Gym/KMC/run_10cube_T_sweep.sh"
 #     tmux attach -t kmc10
 
 set -u
 
-REPO="/home/klechner/doctor/gnn_kmc"
+REPO="/path/to/GNN_Gym"
 WRAPPER="${REPO}/scipts/KMC/run_until_done.sh"
 SESSION_STEPS=5000
 MAX_RESTARTS=500

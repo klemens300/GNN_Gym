@@ -13,7 +13,7 @@ of the legacy per-step rebuild (use_static_cache=False):
 These tests skip if torch / torch_geometric / the trained model are missing,
 matching the convention in test_phase3.py.
 
-Run from /home/klemens/doctor/gnn_kmc/scipts:
+Run from /path/to/GNN_Gym:
 
     pytest -v KMC/tests/test_phase6.py
 """

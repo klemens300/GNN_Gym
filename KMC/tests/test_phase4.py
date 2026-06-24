@@ -1,7 +1,7 @@
 """
 Phase-4 tests for observables and trajectory I/O.
 
-Run from /home/klemens/doctor/gnn_kmc/scipts:
+Run from /path/to/GNN_Gym:
 
     pytest -v KMC/tests/test_phase4.py
 """

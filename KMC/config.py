@@ -64,7 +64,7 @@ class KMCConfig:
     random_seed: int = 42
 
     # --- GNN predictor (used in Phase 3+) ---
-    gnn_model_path: str = "/home/klemens/doctor/gnn_kmc/model/mo_nb_ta_w.pt"
+    gnn_model_path: str = "/path/to/GNN_Gym/model/mo_nb_ta_w.pt"
     gnn_device: Literal["cuda", "cpu", "auto"] = "auto"
     # If True (default) the predictor uses the Phase-6 static-lattice graph
     # cache: ~5-8x faster but exercises a PyG batching path that has been
@@ -89,7 +89,7 @@ class KMCConfig:
     # --- DiffusionLookup (used in Phase 5b+) ---
     # JSON cache of pre-computed (or on-the-fly computed) diffusion data.
     diffusion_cache_path: str = (
-        "/home/klemens/doctor/gnn_kmc/data/diffusion_cache.json"
+        "/path/to/GNN_Gym/data/diffusion_cache.json"
     )
     # k-nearest-neighbour interpolation parameters for the lookup.
     lookup_n_neighbors: int = 3

@@ -11,7 +11,7 @@ Covers:
   count, snapshots survive).
 - Atomic write: the .tmp file does not linger after a successful save.
 
-Run from /home/klemens/doctor/gnn_kmc/scipts:
+Run from /path/to/GNN_Gym:
 
     pytest -v KMC/tests/test_checkpoint.py
 """

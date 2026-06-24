@@ -1,7 +1,7 @@
 """
 Phase-5a tests: ensemble runner.
 
-Run from /home/klemens/doctor/gnn_kmc/scipts:
+Run from /path/to/GNN_Gym:
 
     pytest -v KMC/tests/test_phase5a.py
 """

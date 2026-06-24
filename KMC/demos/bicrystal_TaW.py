@@ -17,7 +17,7 @@ Outputs (under output_dir, default `kmc_outputs/bicrystal_TaW/`):
     config_used.json        Run settings (for reproducibility).
 
 Usage:
-    cd /home/klemens/doctor/gnn_kmc/scipts
+    cd /path/to/GNN_Gym
     conda activate fairchem
     python -m KMC.demos.bicrystal_TaW                # default: GNN, 50k steps
     python -m KMC.demos.bicrystal_TaW --mock         # 10-second smoke test
