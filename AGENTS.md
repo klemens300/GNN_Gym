@@ -32,9 +32,10 @@ with the vacancy concentration c_v(T) and a Debye attempt frequency, and a
 swap Metropolis Monte Carlo of the equilibrium order.
 
 The paper this code belongs to: Lechner, Zhang, Wagatha, Knabl, Clemens,
-Holec, "A graph neural network surrogate for the investigation of kinetic
-freezing in the Mo-Nb-Ta-W system" (2026). Systems: equiatomic Mo-Nb-Ta-W, Ta-W,
-and the pure metals Mo, Nb, Ta, W, all bcc.
+Holec, "Learned lattice models for kinetic and Metropolis Monte Carlo in
+multicomponent alloys: kinetic freezing of chemical order in Mo–Nb–Ta–W"
+(2026). Systems: equiatomic Mo-Nb-Ta-W, Ta-W, and the pure metals Mo, Nb,
+Ta, W, all bcc.
 
 ## 2. Repository map
 

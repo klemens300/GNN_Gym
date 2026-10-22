@@ -5,8 +5,9 @@ alloys, with kinetic Monte Carlo (KMC) and Metropolis Monte Carlo on top of
 it. This repository contains the code, models and data of
 
 > K. Lechner, J. Zhang, P. Wagatha, W. Knabl, H. Clemens, D. Holec,
-> *A graph neural network surrogate for the investigation of kinetic freezing
-> in the Mo-Nb-Ta-W system* (2026).
+> *Learned lattice models for kinetic and Metropolis Monte Carlo in
+> multicomponent alloys: kinetic freezing of chemical order in Mo–Nb–Ta–W*
+> (2026).
 
 ## What it does
 
@@ -88,6 +89,15 @@ data to the analysis of the simulations. They write their outputs to
 reference data are archived separately (see REPRODUCE.md) and can be placed
 in `runs/` and `data/dft/` to rerun the analysis without rerunning the
 simulations.
+
+## Working with an AI assistant
+
+`AGENTS.md` describes the code for coding agents and AI assistants: the
+structure, the properties that must not break (with the tests that guard
+them), how to add another element set or lattice, and the facts needed to
+answer questions about models, methods and results. Agents that read
+`AGENTS.md` or `CLAUDE.md` pick it up automatically when started in the
+repository; for a chat assistant, attach the file to the conversation.
 
 ## Scope
 

@@ -10,7 +10,7 @@ authors:
     affiliation: "Montanuniversität Leoben"
 preferred-citation:
   type: article
-  title: "A graph neural network surrogate for the investigation of kinetic freezing in the Mo-Nb-Ta-W system"
+  title: "Learned lattice models for kinetic and Metropolis Monte Carlo in multicomponent alloys: kinetic freezing of chemical order in Mo–Nb–Ta–W"
   authors:
     - family-names: Lechner
       given-names: Klemens
