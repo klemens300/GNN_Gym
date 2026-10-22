@@ -1,0 +1,34 @@
+# Pure Mo, Nb, Ta, W, third realisation (see pure_s0.yaml).
+#   python -m gnn_gym.kmc.campaign configs/kmc/pure_s2.yaml
+#
+# Seeds are base 2007 + T + an offset per element (Mo 0, Nb 100, Ta 200,
+# W 300); the same four pairs of points share a seed as in pure_s0.yaml.
+campaign:
+  runs_dir: runs/pure_s2
+  de_model: models/MoNbTaW/de_L2_s0.pt
+  bsym_model: models/MoNbTaW/bsym_site_s0.pt
+
+defaults:
+  supercell_size: 12
+  n_steps: 500000
+  attempt_frequency_Hz: 1.0e+13
+  escape: true
+  escape_params: {revisit_threshold: 3, window: 200, internal_n_kT: 1.0,
+                  max_basin_size: 100, cooldown_steps: 25}
+  snapshot_every: 500
+  checkpoint_every: 2000
+  progress_every: 5000
+
+points:
+  - {system: Mo, T_K: 1100, seed: 3107}
+  - {system: Mo, T_K: 1300, seed: 3307}
+  - {system: Mo, T_K: 1500, seed: 3507}
+  - {system: Nb, T_K: 1100, seed: 3207}
+  - {system: Nb, T_K: 1300, seed: 3407}
+  - {system: Nb, T_K: 1500, seed: 3607}
+  - {system: Ta, T_K: 1100, seed: 3307}
+  - {system: Ta, T_K: 1300, seed: 3507}
+  - {system: Ta, T_K: 1500, seed: 3707}
+  - {system: W, T_K: 1100, seed: 3407}
+  - {system: W, T_K: 1300, seed: 3607}
+  - {system: W, T_K: 1500, seed: 3807}

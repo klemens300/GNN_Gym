@@ -1,0 +1,20 @@
+# Elastic-constant sweep behind the attempt frequency. The sweep of the paper
+# is data/nu0/elastic_MoNbTaW.csv (grid table and fit from it:
+# python -m gnn_gym.realtime.nu0 configs/realtime.yaml --build). Recompute it
+# (~4 GPU-h) into `out`:
+#   python -m gnn_gym.oracle.elastic configs/oracle/elastic_MoNbTaW.yaml \
+#       --replay data/nu0/elastic_MoNbTaW.csv
+recipe: configs/oracle/recipe.yaml    # uMLIP and relaxation tolerance
+elements: [Mo, Nb, Ta, W]
+lattice: bcc
+size: 4                 # 128 sites
+grid_step: 0.10         # 286 compositions
+# Cells per composition: [centre element, number of seeds]; seeds count up
+# per composition in this order (12 cells). The stored sweep (2900 cells)
+# follows this plan for 152 compositions; 133 compositions have one Nb cell
+# (Mo seeds 1-5, Nb 6, Ta 7, W 8) and one composition has its Ta cell at seed
+# 10. --replay data/nu0/elastic_MoNbTaW.csv recomputes exactly the stored list.
+centres: [[Mo, 5], [Nb, 5], [Ta, 1], [W, 1]]
+a_start: 3.2            # start of the cell relaxation (A), every composition
+strain: {n_steps: 5, delta: 0.02}
+out: runs/oracle/elastic_MoNbTaW.csv

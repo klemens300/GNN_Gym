@@ -1,0 +1,24 @@
+# Ordering energies of the site-energy model against the uMLIP (paper Table
+# "Ordering energetics", model column; uMLIP column from
+# configs/validation/ground_state_<system>.yaml).
+#   python -m gnn_gym.validation.ordering configs/validation/ordering.yaml
+model: models/MoNbTaW/de_L2_s0.pt
+n_random: 5                 # decorations averaged for random and each B2
+random_seed: 1000           # random decoration s: seed random_seed + seed + s
+b2_seed: 100                # B2 decoration s: seed b2_seed + seed + s
+seed: 0
+layer_sequence: [Nb, Mo, Ta, W, W, Ta, Mo, Nb]   # Kostiuchenko et al., (100) planes
+relax: ionic                # which uMLIP relaxation the comparison uses
+device: cuda
+out_dir: results/validation
+systems:
+  # 8^3: the edge holds the eight-plane period of the layered candidate, and
+  # a site energy does not see its own periodic images (it does at 4^3)
+  MoNbTaW:
+    elements: [Mo, Nb, Ta, W]
+    sizes: [4, 8]
+    reference: results/validation/uma_ground_state_MoNbTaW.json
+  TaW:
+    elements: [Ta, W]
+    sizes: [8]
+    reference: results/validation/uma_ground_state_TaW.json

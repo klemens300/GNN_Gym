@@ -1,0 +1,26 @@
+# Vacancy formation energies for c_v (paper Sec. "From simulated to physical
+# time"); writes the files that configs/realtime.yaml reads.
+#   python -m gnn_gym.oracle.formation configs/oracle/formation.yaml
+datasets:
+  - data/jumps/MoNbTaW_7cube_train.csv
+  - data/jumps/MoNbTaW_7cube_referee.csv
+elements: [Mo, Nb, Ta, W]          # frac_<X> columns of the datasets
+realtime: configs/realtime.yaml    # S_f for the printed c_v table
+
+# Alloys: Gaussian kernel of this width (in atomic fraction) around the
+# composition of configs/systems.yaml, resampled to n_samples with a fixed seed.
+alloys:
+  MoNbTaW: data/cv/cv_7cube_MoNbTaW.json
+  TaW: data/cv/cv_7cube_TaW.json
+kernel_width: 0.10
+kernel_width_check: 0.20           # sensitivity: doubled width
+n_samples: 5000
+seed: 0
+
+# Pure elements: mean over the unary cells (spread below 2 meV), stored to
+# 1 meV.
+pure_out: data/cv/cv_7cube_pure.json
+pure_digits: 3
+
+temperatures: [500, 700, 900, 1100, 1300, 1500, 2000]
+arrhenius_range: [1100, 1500]      # effective formation energy of c_v(T)

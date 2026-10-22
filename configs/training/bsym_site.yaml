@@ -1,0 +1,32 @@
+# Barrier model of the paper, per-site read-out (shipped as
+# models/MoNbTaW/bsym_site_s0.pt; retraining writes to runs/models).
+#   python -m gnn_gym.training.train configs/training/bsym_site.yaml
+model:
+  target: bsym
+  elements: [Mo, Nb, Ta, W]
+  lattice: bcc
+  size: 7
+  shells: [1, 2]
+  bsym_layers: 2
+  bsym_hidden: 128
+  bsym_pool_hops: 2
+  bsym_head_hidden: [256, 128]
+  bsym_line_graph: true
+  bsym_site_sum: true
+
+training:
+  train_csv: data/jumps/MoNbTaW_7cube_train.csv
+  referee_csv: data/jumps/MoNbTaW_7cube_referee.csv
+  out_dir: runs/models
+  run_name: bsym_site_s0
+  batch_size: 64
+  epochs: 200
+  lr: 1.0e-3
+  weight_decay: 1.0e-6
+  lr_factor: 0.5
+  lr_patience: 12
+  patience: 40
+  huber_delta_meV: 50.0
+  grad_clip: 5.0
+  val_frac: 0.1
+  seed: 0

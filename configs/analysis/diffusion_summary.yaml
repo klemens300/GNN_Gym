@@ -1,0 +1,22 @@
+# Diffusion as reported (Table kmc, Table pure-diffusion, Table alloy-vs-pure,
+# Figs. pure_diffusion and alloy_diffusion, and the numbers in the text).
+#   python -m gnn_gym.analysis.analyze_campaign configs/analysis/campaign_alloys.yaml
+#   python -m gnn_gym.analysis.analyze_campaign configs/analysis/campaign_pure.yaml
+#   python -m gnn_gym.analysis.pure_elements configs/analysis/pure_elements.yaml
+#   python -m gnn_gym.analysis.escape_vs_plain configs/analysis/escape_vs_plain.yaml
+#   python -m gnn_gym.analysis.order_kinetics configs/analysis/order_kinetics.yaml
+#   python -m gnn_gym.analysis.diffusion_summary configs/analysis/diffusion_summary.yaml
+campaign: results/kmc/campaign
+order_reached: results/kmc/order_reached_summary.csv
+# D_vac of the first 5e5 steps of the 2e6-step runs, against the Arrhenius line
+head_runs: results/kmc/escape_vs_plain.csv
+pure:
+  diffusion: results/kmc/pure_elements_diffusion.csv
+  points: results/kmc/pure_elements_points.csv
+  runs: results/kmc/campaign_pure/campaign_runs.csv
+literature: data/literature/diffusion_literature.csv
+systems: [MoNbTaW, TaW]
+elements: [Mo, Nb, Ta, W]
+temperatures: [700, 900, 1100, 1300, 1500]   # Ta-W 500 K is not used (limit cycle)
+arrhenius_K: [1100, 1500]    # fit range; below it the runs are sub-diffusive
+out_dir: results/kmc

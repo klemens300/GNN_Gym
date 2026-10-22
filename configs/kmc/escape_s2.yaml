@@ -1,0 +1,29 @@
+# Third realisation of the temperatures with three realisations
+# (Mo-Nb-Ta-W 1100-1500 K, Ta-W 900-1500 K), escape layer on.
+#   python -m gnn_gym.kmc.campaign configs/kmc/escape_s2.yaml
+#
+# Seeds are base 2042 + T.
+campaign:
+  runs_dir: runs/escape_s2
+  de_model: models/MoNbTaW/de_L2_s0.pt
+  bsym_model: models/MoNbTaW/bsym_site_s0.pt
+
+defaults:
+  supercell_size: 12
+  n_steps: 500000
+  attempt_frequency_Hz: 1.0e+13
+  escape: true
+  escape_params: {revisit_threshold: 3, window: 200, internal_n_kT: 1.0,
+                  max_basin_size: 100, cooldown_steps: 25}
+  snapshot_every: 500
+  checkpoint_every: 2000
+  progress_every: 5000
+
+points:
+  - {system: MoNbTaW, T_K: 1100, seed: 3142}
+  - {system: MoNbTaW, T_K: 1300, seed: 3342}
+  - {system: MoNbTaW, T_K: 1500, seed: 3542}
+  - {system: TaW, T_K: 900, seed: 2942}
+  - {system: TaW, T_K: 1100, seed: 3142}
+  - {system: TaW, T_K: 1300, seed: 3342}
+  - {system: TaW, T_K: 1500, seed: 3542}

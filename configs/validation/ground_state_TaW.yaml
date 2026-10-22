@@ -1,0 +1,13 @@
+# uMLIP energy of B2 Ta-W against the random alloy (paper Table "Ordering
+# energetics", uMLIP column).
+#   python -m gnn_gym.validation.ground_state configs/validation/ground_state_TaW.yaml
+recipe: configs/oracle/recipe.yaml
+system: TaW
+size: 8
+lattice_parameter_A: calibrated   # equiatomic Ta-W, gnn_gym.oracle.calibrate
+calibration: results/oracle/lattice_parameters.json
+n_random: 3
+relax: [ionic]
+fmax: 0.02
+steps: 300
+out: results/validation/uma_ground_state_TaW.json

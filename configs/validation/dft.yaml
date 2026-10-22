@@ -1,0 +1,18 @@
+# uMLIP oracle and lattice model against 235 DFT-NEB barriers of Mo-Nb-Ta-W
+# (paper Sec. "Accuracy and cost", Fig. oracle_dft).
+#   python -m gnn_gym.validation.dft configs/validation/dft.yaml umlip   # ~5 GPU-min
+#   python -m gnn_gym.validation.dft configs/validation/dft.yaml model   # seconds
+#   python -m gnn_gym.validation.dft configs/validation/dft.yaml stats
+dft_csv: data/dft/dft_neb_MoNbTaW.csv          # DFT barriers per configuration
+structures: data/dft/structures                # <folder>/{initial,final}[_unrelaxed].xyz
+umlip_forward_csv: data/dft/umlip_neb_MoNbTaW.csv   # uMLIP NEB forward barriers
+umlip_models: {s: uma-s-1p1, m: uma-m-1p1}     # s is the oracle of the paper
+umlip_task: omat
+lattice: bcc
+elements: [Mo, Nb, Ta, W]
+models:
+  de: models/MoNbTaW/de_L2_s0.pt
+  bsym: models/MoNbTaW/bsym_site_s0.pt
+replica: 2                                     # 4^3 DFT cell -> 8^3 for the model
+table: results/validation/dft_comparison.csv
+summary: results/validation/dft_comparison.json

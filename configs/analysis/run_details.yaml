@@ -1,0 +1,21 @@
+# Numbers read from single runs (Results, order reached by vacancy diffusion;
+# comparison with experiment).
+#   python -m gnn_gym.analysis.run_details configs/analysis/run_details.yaml
+de_model: models/MoNbTaW/de_L2_s0.pt          # site energies (confinement)
+bsym_model: models/MoNbTaW/bsym_site_s0.pt
+sites:
+  # confinement of the vacancy at 700 K against the free walk at 1500 K
+  - {run: runs/escape_local/kmc_MoNbTaW_T700, from_step: 400000, to_step: 500000}
+  - {run: runs/escape_local/kmc_MoNbTaW_T700}
+  - {run: runs/escape_local/kmc_MoNbTaW_T1500, to_step: 500000}
+  - {run: runs/escape_s1/kmc_MoNbTaW_T1500, to_step: 500000}
+  - {run: runs/escape_s2/kmc_MoNbTaW_T1500, to_step: 500000}
+confinement:
+  # are the sites of the 700 K basin more ordered or lower in energy?
+  - {run: runs/escape_local/kmc_MoNbTaW_T700, from_step: 400000, to_step: 500000,
+     pair: Mo-Ta}
+early_order:
+  # ageing of Bajpai et al.: five weeks, read at 900 K, and the first 5000 steps
+  - {run: runs/escape_local/kmc_MoNbTaW_T900, pair: Mo-Ta, t_real_s: 3024000}
+  - {run: runs/escape_local/kmc_MoNbTaW_T900, pair: Mo-Ta, to_step: 5000}
+out_dir: results/kmc

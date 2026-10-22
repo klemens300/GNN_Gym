@@ -1,0 +1,38 @@
+# Simulated -> physical time (gnn_gym.realtime).
+#
+#   t_real = (nu0_sim / nu0_phys) * t_sim / (N_atoms * c_v(T))
+#   c_v(T) = exp(S_f / k_B) * < exp(-E_f / k_B T) >
+#
+# Keys under c_v and the systems used with nu0 are the names of
+# configs/systems.yaml.
+
+# Vibrational formation entropy in units of k_B. Not computed; 1.5 lies in
+# the range of 1 to 3 k_B reported for metals and shifts every physical time
+# by the same factor.
+S_f_kB: 1.5
+
+# Source of E_f per system (python -m gnn_gym.oracle.formation
+# configs/oracle/formation.yaml writes these files):
+#   spectrum   E_f samples of the alloy around its composition
+#   pure       single E_f of a vacancy in the pure element
+c_v:
+  MoNbTaW: {spectrum: data/cv/cv_7cube_MoNbTaW.json}
+  TaW:     {spectrum: data/cv/cv_7cube_TaW.json}
+  Mo:      {pure: data/cv/cv_7cube_pure.json}
+  Nb:      {pure: data/cv/cv_7cube_pure.json}
+  Ta:      {pure: data/cv/cv_7cube_pure.json}
+  W:       {pure: data/cv/cv_7cube_pure.json}
+
+# Attempt frequency: Debye frequency from uMLIP elastic constants
+# (python -m gnn_gym.realtime.nu0 configs/realtime.yaml --build writes grid
+# and fit from the sweep of gnn_gym.oracle.elastic).
+nu0:
+  grid: data/nu0/nu0_grid_MoNbTaW.csv
+  fit: data/nu0/nu0_fit_MoNbTaW.json
+  lattice: bcc
+  # build only
+  source: data/nu0/elastic_MoNbTaW.csv
+  source_cell_size: 4          # the sweep stores the edge of its 4^3 cell
+  elements: [Mo, Nb, Ta, W]
+  degree: 3                    # cubic; quadratic is clearly worse, quartic no better
+  masses_u: {Mo: 95.95, Nb: 92.906, Ta: 180.948, W: 183.84}

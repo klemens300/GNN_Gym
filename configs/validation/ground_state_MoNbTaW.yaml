@@ -1,0 +1,13 @@
+# uMLIP energies of the ordered candidates of equiatomic Mo-Nb-Ta-W
+# (paper Table "Ordering energetics", uMLIP column).
+#   python -m gnn_gym.validation.ground_state configs/validation/ground_state_MoNbTaW.yaml
+recipe: configs/oracle/recipe.yaml
+system: MoNbTaW
+size: 8                 # edge a multiple of 4: holds the eight-plane period
+lattice_parameter_A: 3.24       # calibrated 3.2391 rounded; the paper values use 3.24
+n_random: 3
+layer_sequence: [Nb, Mo, Ta, W, W, Ta, Mo, Nb]   # Kostiuchenko et al., (100) planes
+relax: [ionic]          # positions relaxed at fixed cell
+fmax: 0.02
+steps: 300
+out: results/validation/uma_ground_state_MoNbTaW.json

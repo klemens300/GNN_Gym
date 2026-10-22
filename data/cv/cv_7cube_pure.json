@@ -1,0 +1,49 @@
+{
+  "description": "vacancy formation energy in the pure elements: mean over the unary cells of the jump dataset, mu = energy per atom of the relaxed pure element",
+  "E_f_eV": {
+    "Mo": 2.914,
+    "Nb": 2.542,
+    "Ta": 2.857,
+    "W": 3.378
+  },
+  "E_f_stats_eV": {
+    "Mo": {
+      "n": 789,
+      "mean": 2.913693814552864,
+      "std": 0.0010026869180991284,
+      "min": 2.911328474883055,
+      "max": 2.9219484748821625
+    },
+    "Nb": {
+      "n": 757,
+      "mean": 2.5420851239875906,
+      "std": 0.00028212970095654194,
+      "min": 2.541188872996994,
+      "max": 2.5429898729973353
+    },
+    "Ta": {
+      "n": 782,
+      "mean": 2.8573919143948023,
+      "std": 0.0004287146638190898,
+      "min": 2.8561554629891077,
+      "max": 2.8585364629884396
+    },
+    "W": {
+      "n": 805,
+      "mean": 3.378455146742945,
+      "std": 0.0008299683822223624,
+      "min": 3.375844774073517,
+      "max": 3.380727774073126
+    }
+  },
+  "mu_pure_eV": {
+    "Mo": -10.919600525117596,
+    "Nb": -10.096895127003169,
+    "Ta": -11.813779537011698,
+    "W": -12.954223225927603
+  },
+  "source": [
+    "data/jumps/MoNbTaW_7cube_train.csv",
+    "data/jumps/MoNbTaW_7cube_referee.csv"
+  ]
+}

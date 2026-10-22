@@ -1,0 +1,27 @@
+# Mo-Nb-Ta-W, first realisation of every temperature (escape layer on).
+#   python -m gnn_gym.kmc.campaign configs/kmc/escape_local.yaml
+#
+# Seeds are base 42 + T. 700 and 900 K run 2e6 steps, the others 5e5.
+# Cell, lattice parameter and composition: configs/systems.yaml (MoNbTaW).
+campaign:
+  runs_dir: runs/escape_local
+  de_model: models/MoNbTaW/de_L2_s0.pt
+  bsym_model: models/MoNbTaW/bsym_site_s0.pt
+
+defaults:
+  supercell_size: 12
+  n_steps: 500000
+  attempt_frequency_Hz: 1.0e+13     # nominal; rescaled by gnn_gym.realtime
+  escape: true
+  escape_params: {revisit_threshold: 3, window: 200, internal_n_kT: 1.0,
+                  max_basin_size: 100, cooldown_steps: 25}
+  snapshot_every: 500
+  checkpoint_every: 2000
+  progress_every: 5000
+
+points:
+  - {system: MoNbTaW, T_K: 700, seed: 742, n_steps: 2000000}
+  - {system: MoNbTaW, T_K: 900, seed: 942, n_steps: 2000000}
+  - {system: MoNbTaW, T_K: 1100, seed: 1142}
+  - {system: MoNbTaW, T_K: 1300, seed: 1342}
+  - {system: MoNbTaW, T_K: 1500, seed: 1542}

@@ -1,0 +1,43 @@
+# Equilibrium order of equiatomic Mo-Nb-Ta-W (paper: Metropolis Monte Carlo,
+# Fig. equilibrium, Table low-T state, alpha_eq of the order kinetics).
+# Four chains: cooling from the random alloy, and heating from the 200 K
+# configuration of the cooling chain of the same seed; seeds 0 and 1.
+#   python -m gnn_gym.metropolis.run configs/metropolis/tord_MoNbTaW.yaml --chain MoNbTaW_cool_s0
+#   python -m gnn_gym.metropolis.run configs/metropolis/tord_MoNbTaW.yaml --chain MoNbTaW_heat_s0
+# One chain is 216 000 sweeps, about one day on one GPU (0.5 s per sweep at
+# 2000 K, 0.1 s at 200 K).
+model: models/MoNbTaW/de_L2_s0.pt
+system: MoNbTaW
+# Element order of the run: it decides which species the random permutation
+# of the start and of the random reference puts on which site, and the pair
+# order of the output columns. The runs of the paper used this order (the
+# B2 partition {Mo,W}|{Nb,Ta}); it does not change any random stream.
+elements: [Mo, W, Nb, Ta]
+size: 12                    # the KMC cell
+n_eq: 2000                  # discarded sweeps per temperature
+n_samp: 4000                # sampled sweeps per temperature
+batch: 8                    # proposals per call (sampler module docstring)
+# decision walk through a batch: until_conflict is the walk of the paper's
+# chains, until_accept the exact single-swap chain (sampler module docstring)
+walk: until_conflict
+trace: true                 # per-sweep trace for the autocorrelation analysis
+reference_seed: 1000        # random reference E_rand: generator seed ...
+n_reference: 8              # ... and number of random decorations
+start_seed_offset: 1000     # random start drawn with seed start_seed_offset + seed
+device: cuda
+# 20 K steps below 800 K, where the order changes fastest
+temperatures: [2000, 1600, 1300, 1100, 900, 800, 780, 760, 740, 720, 700, 680,
+               660, 640, 620, 600, 580, 560, 540, 520, 500, 480, 460, 440, 420,
+               400, 380, 360, 340, 320, 300, 280, 260, 240, 220, 200]
+out_dir: runs/metropolis/tord
+chains:
+  - {name: MoNbTaW_cool_s0, mode: cool, seed: 0, start: random}
+  - {name: MoNbTaW_cool_s1, mode: cool, seed: 1, start: random}
+  - name: MoNbTaW_heat_s0
+    mode: heat
+    seed: 0
+    start: {snapshot: runs/metropolis/tord/MoNbTaW_cool_s0.snapshots.npz, T: 200}
+  - name: MoNbTaW_heat_s1
+    mode: heat
+    seed: 1
+    start: {snapshot: runs/metropolis/tord/MoNbTaW_cool_s1.snapshots.npz, T: 200}

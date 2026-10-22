@@ -1,0 +1,15 @@
+# Self-diffusion of the pure metals from the pure campaign table.
+#   python -m gnn_gym.analysis.analyze_campaign configs/analysis/campaign_pure.yaml
+#   python -m gnn_gym.analysis.pure_elements configs/analysis/pure_elements.yaml
+systems: [Mo, Nb, Ta, W]
+runs_csv: results/kmc/campaign_pure/campaign_runs.csv
+# uMLIP barrier of the unary reference cells (rows with subsystem = element)
+jumps:
+  - data/jumps/MoNbTaW_7cube_train.csv
+  - data/jumps/MoNbTaW_7cube_referee.csv
+# model barrier of the same cells: per-jump predictions on the referee set
+# (python -m gnn_gym.training.evaluate ... --predictions)
+predictions: results/model/referee_predictions.csv
+# tracer correlation factor of the bcc lattice, the reference for f_X
+tracer_correlation_factor: 0.7272
+out_dir: results/kmc

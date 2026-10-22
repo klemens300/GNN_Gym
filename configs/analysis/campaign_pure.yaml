@@ -1,0 +1,8 @@
+# Tables of the pure-metal KMC campaign (three realisations).
+#   python -m gnn_gym.analysis.analyze_campaign configs/analysis/campaign_pure.yaml
+runs:
+  - runs/pure_s0/kmc_*
+  - runs/pure_s1/kmc_*
+  - runs/pure_s2/kmc_*
+out_dir: results/kmc/campaign_pure
+nsub: 400                 # alpha_1(t) points per run in campaign_alpha.csv

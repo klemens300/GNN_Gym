@@ -1,0 +1,22 @@
+# Reference jump datasets of the paper (data/jumps/MoNbTaW_7cube_*.csv).
+#   python -m gnn_gym.oracle.jumps configs/oracle/jumps_MoNbTaW.yaml --stream train
+#   python -m gnn_gym.oracle.jumps configs/oracle/jumps_MoNbTaW.yaml --stream referee
+# One jump takes about a minute on one GPU; the runs are resume-safe (rows
+# already in the output are skipped).
+recipe: configs/oracle/recipe.yaml
+elements: [Mo, Nb, Ta, W]
+lattice: bcc
+size: 7                 # 686 sites; cell-size study: configs/oracle/window_study.yaml
+
+# Jump i of a stream uses seed seed_base + i, both for the composition draw
+# and for the decoration. The two streams are disjoint; the referee set is
+# never used in training.
+streams:
+  train:
+    seed_base: 900000
+    n_jumps: 10000
+    out: data/jumps/MoNbTaW_7cube_train.csv
+  referee:
+    seed_base: 950000
+    n_jumps: 1500
+    out: data/jumps/MoNbTaW_7cube_referee.csv

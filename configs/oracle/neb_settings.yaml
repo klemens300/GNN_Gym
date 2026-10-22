@@ -1,0 +1,16 @@
+# NEB image count and force tolerance (paper Sec. "Reference data": one
+# intermediate image reproduces a fifteen-image reference to within 2 meV at
+# fmax 0.01 eV/A; the 8^3 windows).
+#   python -m gnn_gym.oracle.neb_settings configs/oracle/neb_settings.yaml run   # ~3 GPU-h
+#   python -m gnn_gym.oracle.neb_settings configs/oracle/neb_settings.yaml analyse
+recipe: configs/oracle/recipe.yaml
+window_study: configs/oracle/window_study.yaml   # parent, seeds, a, relax_fmax
+windows: [8, 12]
+n_env: 2
+base: {method: improvedtangent, k: 0.1, climb: true, steps: 500}
+reference: {n_images: 15, fmax: 0.01}
+grid:
+  n_images: [3, 5, 7]            # endpoints included: 1, 3, 5 intermediate images
+  fmax: [0.05, 0.02, 0.01]
+data: data/oracle/neb_settings_MoNbTaW.csv
+results: results/oracle/neb_settings.json

@@ -1,0 +1,30 @@
+# Site-energy model of the paper (shipped as models/MoNbTaW/de_L2_s0.pt;
+# retraining writes to runs/models and leaves the shipped model untouched).
+#   python -m gnn_gym.training.train configs/training/de_L2.yaml
+model:
+  target: de
+  elements: [Mo, Nb, Ta, W]
+  lattice: bcc
+  size: 7
+  shells: [1, 2]
+  de_layers: 2
+  de_hidden: 96
+  de_site_hidden: [96, 48]
+  de_line_graph: false
+
+training:
+  train_csv: data/jumps/MoNbTaW_7cube_train.csv
+  referee_csv: data/jumps/MoNbTaW_7cube_referee.csv
+  out_dir: runs/models
+  run_name: de_L2_s0
+  batch_size: 128
+  epochs: 300
+  lr: 1.0e-3
+  weight_decay: 1.0e-6
+  lr_factor: 0.5
+  lr_patience: 12
+  patience: 40
+  huber_delta_meV: 50.0
+  grad_clip: 5.0
+  val_frac: 0.1
+  seed: 0

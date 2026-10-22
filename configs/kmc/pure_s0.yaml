@@ -1,0 +1,42 @@
+# Pure Mo, Nb, Ta, W, first realisation, through the alloy pipeline.
+#   python -m gnn_gym.kmc.campaign configs/kmc/pure_s0.yaml
+#
+# Seeds are base 7 + T + an offset per element (Mo 0, Nb 100, Ta 200, W 300).
+# The offsets equal the temperature step, so four pairs of points share a
+# seed (Mo 1300 / Ta 1100, Mo 1500 / Ta 1300, Nb 1300 / W 1100,
+# Nb 1500 / W 1300). In a pure metal all jumps of a step have the same
+# barrier, so these pairs make the same walk on the lattice (only the clock
+# differs) and their statistical errors are shared. This matters for D_vac
+# and f of a single vacancy; the tracer D* averages over ~3500 atoms and its
+# noise is small either way.
+# Lattice parameter per element: configs/systems.yaml. In a pure metal no
+# escape occurs; the layer is on so that the pipeline equals the alloys'.
+campaign:
+  runs_dir: runs/pure_s0
+  de_model: models/MoNbTaW/de_L2_s0.pt
+  bsym_model: models/MoNbTaW/bsym_site_s0.pt
+
+defaults:
+  supercell_size: 12
+  n_steps: 500000
+  attempt_frequency_Hz: 1.0e+13
+  escape: true
+  escape_params: {revisit_threshold: 3, window: 200, internal_n_kT: 1.0,
+                  max_basin_size: 100, cooldown_steps: 25}
+  snapshot_every: 500
+  checkpoint_every: 2000
+  progress_every: 5000
+
+points:
+  - {system: Mo, T_K: 1100, seed: 1107}
+  - {system: Mo, T_K: 1300, seed: 1307}
+  - {system: Mo, T_K: 1500, seed: 1507}
+  - {system: Nb, T_K: 1100, seed: 1207}
+  - {system: Nb, T_K: 1300, seed: 1407}
+  - {system: Nb, T_K: 1500, seed: 1607}
+  - {system: Ta, T_K: 1100, seed: 1307}
+  - {system: Ta, T_K: 1300, seed: 1507}
+  - {system: Ta, T_K: 1500, seed: 1707}
+  - {system: W, T_K: 1100, seed: 1407}
+  - {system: W, T_K: 1300, seed: 1607}
+  - {system: W, T_K: 1500, seed: 1807}

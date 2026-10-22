@@ -1,0 +1,40 @@
+# Material systems. Composition defaults to equiatomic.
+#
+# lattice_parameter_A enters the simulations only through distances (jump
+# length, positions in output files); the lattice model works on integer
+# site coordinates.
+#   alloys   uMLIP-relaxed equiatomic Mo-Nb-Ta-W cell
+#            (python -m gnn_gym.oracle.calibrate configs/oracle/calibrate.yaml);
+#            Ta-W uses the same value
+#   pure     uMLIP-relaxed unary cells of the elastic-constant sweep
+#            (data/nu0/elastic_MoNbTaW.csv)
+
+MoNbTaW:
+  elements: [Mo, Nb, Ta, W]
+  lattice: bcc
+  lattice_parameter_A: 3.239121
+
+TaW:
+  elements: [Ta, W]
+  lattice: bcc
+  lattice_parameter_A: 3.239121
+
+Mo:
+  elements: [Mo]
+  lattice: bcc
+  lattice_parameter_A: 3.1614
+
+Nb:
+  elements: [Nb]
+  lattice: bcc
+  lattice_parameter_A: 3.3199
+
+Ta:
+  elements: [Ta]
+  lattice: bcc
+  lattice_parameter_A: 3.3176
+
+W:
+  elements: [W]
+  lattice: bcc
+  lattice_parameter_A: 3.1824

@@ -1,0 +1,7 @@
+# Tables of the plain-BKL reference runs (no escape layer); compare with the
+# runs of the same seed in results/kmc/campaign (escape_local).
+#   python -m gnn_gym.analysis.analyze_campaign configs/analysis/campaign_no_escape.yaml
+runs:
+  - runs/no_escape/kmc_*
+out_dir: results/kmc/campaign_no_escape
+nsub: 400

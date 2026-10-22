@@ -1,0 +1,50 @@
+# Two-start equilibration test (paper: Metropolis Monte Carlo, last
+# paragraph; equilibrium order, layered and B2 starts). Every temperature is
+# run twice for 2000 sweeps, all of them traced and none discarded:
+#   cooled   from a configuration cooled to that temperature (seed 0); the
+#            200 K chains start from the 300 K configuration
+#   ordered  from the lowest-energy candidate of the ordering table: the
+#            layered arrangement (Mo-Nb-Ta-W) or perfect B2 (Ta-W) (seed 1)
+# The cooled configurations are inputs (data/metropolis/two_start): the final
+# configurations of a cooling chain of the same model on the same cell with
+# 100 + 100 sweeps per temperature.
+#   python -m gnn_gym.metropolis.run configs/metropolis/two_start.yaml
+#   python -m gnn_gym.metropolis.run configs/metropolis/two_start.yaml --chain MoNbTaW_eq_T300_ordered
+model: models/MoNbTaW/de_L2_s0.pt
+size: 12
+n_eq: 0
+n_samp: 2000
+batch: 8
+walk: until_conflict
+trace: true
+reference_seed: 1000
+n_reference: 8
+start_seed_offset: 1000
+layer_sequence: [Nb, Mo, Ta, W, W, Ta, Mo, Nb]   # Kostiuchenko et al., (100) planes
+device: cuda
+out_dir: runs/metropolis/two_start
+chains:
+  - {name: MoNbTaW_eq_T700_cooled, system: MoNbTaW, elements: [Mo, W, Nb, Ta], temperatures: [700], mode: cool, seed: 0,
+     start: {snapshot: data/metropolis/two_start/MoNbTaW_cool_s0.snapshots.npz, T: 700}}
+  - {name: MoNbTaW_eq_T700_ordered, system: MoNbTaW, elements: [Mo, W, Nb, Ta], temperatures: [700], mode: heat, seed: 1, start: layered}
+  - {name: MoNbTaW_eq_T500_cooled, system: MoNbTaW, elements: [Mo, W, Nb, Ta], temperatures: [500], mode: cool, seed: 0,
+     start: {snapshot: data/metropolis/two_start/MoNbTaW_cool_s0.snapshots.npz, T: 500}}
+  - {name: MoNbTaW_eq_T500_ordered, system: MoNbTaW, elements: [Mo, W, Nb, Ta], temperatures: [500], mode: heat, seed: 1, start: layered}
+  - {name: MoNbTaW_eq_T300_cooled, system: MoNbTaW, elements: [Mo, W, Nb, Ta], temperatures: [300], mode: cool, seed: 0,
+     start: {snapshot: data/metropolis/two_start/MoNbTaW_cool_s0.snapshots.npz, T: 300}}
+  - {name: MoNbTaW_eq_T300_ordered, system: MoNbTaW, elements: [Mo, W, Nb, Ta], temperatures: [300], mode: heat, seed: 1, start: layered}
+  - {name: MoNbTaW_eq_T200_cooled, system: MoNbTaW, elements: [Mo, W, Nb, Ta], temperatures: [200], mode: cool, seed: 0,
+     start: {snapshot: data/metropolis/two_start/MoNbTaW_cool_s0.snapshots.npz, T: 300}}
+  - {name: MoNbTaW_eq_T200_ordered, system: MoNbTaW, elements: [Mo, W, Nb, Ta], temperatures: [200], mode: heat, seed: 1, start: layered}
+  - {name: TaW_eq_T700_cooled, system: TaW, elements: [Ta, W], temperatures: [700], mode: cool, seed: 0,
+     start: {snapshot: data/metropolis/two_start/TaW_cool_s0.snapshots.npz, T: 700}}
+  - {name: TaW_eq_T700_ordered, system: TaW, elements: [Ta, W], temperatures: [700], mode: heat, seed: 1, start: b2}
+  - {name: TaW_eq_T400_cooled, system: TaW, elements: [Ta, W], temperatures: [400], mode: cool, seed: 0,
+     start: {snapshot: data/metropolis/two_start/TaW_cool_s0.snapshots.npz, T: 400}}
+  - {name: TaW_eq_T400_ordered, system: TaW, elements: [Ta, W], temperatures: [400], mode: heat, seed: 1, start: b2}
+  - {name: TaW_eq_T300_cooled, system: TaW, elements: [Ta, W], temperatures: [300], mode: cool, seed: 0,
+     start: {snapshot: data/metropolis/two_start/TaW_cool_s0.snapshots.npz, T: 300}}
+  - {name: TaW_eq_T300_ordered, system: TaW, elements: [Ta, W], temperatures: [300], mode: heat, seed: 1, start: b2}
+  - {name: TaW_eq_T200_cooled, system: TaW, elements: [Ta, W], temperatures: [200], mode: cool, seed: 0,
+     start: {snapshot: data/metropolis/two_start/TaW_cool_s0.snapshots.npz, T: 300}}
+  - {name: TaW_eq_T200_ordered, system: TaW, elements: [Ta, W], temperatures: [200], mode: heat, seed: 1, start: b2}

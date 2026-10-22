@@ -1,0 +1,9 @@
+# uMLIP lattice parameters of the equiatomic alloys.
+#   python -m gnn_gym.oracle.calibrate configs/oracle/calibrate.yaml
+# MoNbTaW gives a = 3.239121 A (configs/systems.yaml), TaW 3.244449 A (used
+# by the ordering check of Ta-W, configs/validation/ground_state_TaW.yaml).
+recipe: configs/oracle/recipe.yaml
+systems: [MoNbTaW, TaW]
+size: 4                 # 128 sites; a converges quickly with cell size
+seeds: [0, 1, 2]        # random decorations averaged
+out: results/oracle/lattice_parameters.json

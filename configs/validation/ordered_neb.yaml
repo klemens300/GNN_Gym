@@ -1,0 +1,28 @@
+# uMLIP-NEB against the lattice model in the trapped states of the KMC runs
+# (paper Sec. "Order reached by vacancy diffusion"; 64 jumps, ~1 GPU-h).
+#   python -m gnn_gym.validation.ordered_neb configs/validation/ordered_neb.yaml
+# Run paths are relative to --runs-root (default: the repository root).
+recipe: configs/oracle/recipe.yaml
+models:
+  de: models/MoNbTaW/de_L2_s0.pt
+  bsym: models/MoNbTaW/bsym_site_s0.pt
+lattice: bcc
+window_size: 7                    # the training cell
+local_shells: [1, 2]              # the neighbourhood the models read:
+local_hops: 3                     #   three hops on the 1st+2nd-shell graph
+order_pair: {MoNbTaW: [Mo, Ta], TaW: [Ta, W]}
+# State after 5x10^5 steps (the 700 and 900 K runs continue to 2x10^6 steps;
+# their 5x10^5 state is the snapshot at that step), and one random start.
+sources:
+  - {label: MoNbTaW_T700,  alloy: MoNbTaW, run: runs/escape_local/kmc_MoNbTaW_T700,  state: final, step: 500000}
+  - {label: MoNbTaW_T900,  alloy: MoNbTaW, run: runs/escape_local/kmc_MoNbTaW_T900,  state: final, step: 500000}
+  - {label: MoNbTaW_T1100, alloy: MoNbTaW, run: runs/escape_local/kmc_MoNbTaW_T1100, state: final, step: 500000}
+  - {label: MoNbTaW_T1500, alloy: MoNbTaW, run: runs/escape_local/kmc_MoNbTaW_T1500, state: final, step: 500000}
+  - {label: TaW_T700,      alloy: TaW,     run: runs/escape/kmc_TaW_T700,            state: final, step: 500000}
+  - {label: TaW_T900,      alloy: TaW,     run: runs/escape/kmc_TaW_T900,            state: final, step: 500000}
+  - {label: TaW_T1100,     alloy: TaW,     run: runs/escape/kmc_TaW_T1100,           state: final, step: 500000}
+  - {label: MoNbTaW_T1100, alloy: MoNbTaW, run: runs/escape_local/kmc_MoNbTaW_T1100, state: initial}
+referee_predictions: results/model/referee_predictions.csv   # gnn_gym.training.evaluate
+high_barrier_eV: 1.6
+out: results/validation/ordered_neb_check.csv
+summary: results/validation/ordered_neb_check.json

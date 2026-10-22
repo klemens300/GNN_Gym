@@ -1,0 +1,26 @@
+# The uMLIP reference recipe (paper Sec. "Reference data"). Shared by the jump
+# dataset, the lattice calibration and the NEB check in ordered environments.
+uma:
+  model: uma-s-1p1
+  task: omat
+
+# FIRE force tolerance of every relaxation (eV/A): the defect-free cell (cell
+# shape and positions) and both jump endpoints (positions, fixed cell).
+relax_fmax: 0.01
+relax_steps: 2000
+
+# Climbing-image NEB. n_images counts the endpoints: one intermediate image
+# reproduces a fifteen-image reference to within 2 meV at fmax 0.01
+# (configs/oracle/neb_settings.yaml); the tolerance, not the image count,
+# decides the accuracy.
+neb:
+  n_images: 3
+  fmax: 0.01
+  method: improvedtangent
+  k: 0.1          # spring constant, eV/A^2
+  climb: true
+  steps: 500
+
+# Elemental bcc lattice parameters (A) for the Vegard starting guess. Only a
+# start: the relaxation of the defect-free cell sets the box.
+vegard_A: {Mo: 3.147, Nb: 3.301, Ta: 3.301, W: 3.165}

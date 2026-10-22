@@ -1,0 +1,34 @@
+# Equilibrium order of equiatomic Ta-W with the Mo-Nb-Ta-W model (paper:
+# Metropolis Monte Carlo, Fig. equilibrium, Table low-T state). Four chains:
+# cooling from the random alloy, and heating from the 200 K configuration of
+# the cooling chain of the same seed; seeds 0 and 1.
+#   python -m gnn_gym.metropolis.run configs/metropolis/tord_TaW.yaml --chain TaW_cool_s0
+#   python -m gnn_gym.metropolis.run configs/metropolis/tord_TaW.yaml --chain TaW_heat_s0
+model: models/MoNbTaW/de_L2_s0.pt
+system: TaW
+elements: [Ta, W]
+size: 12
+n_eq: 2000
+n_samp: 4000
+batch: 8
+walk: until_conflict
+trace: true
+reference_seed: 1000
+n_reference: 8
+start_seed_offset: 1000
+device: cuda
+# 20 K steps below 500 K, around the heat-capacity maximum
+temperatures: [2000, 1600, 1300, 1100, 900, 700, 500, 480, 460, 440, 420, 400,
+               380, 360, 340, 320, 300, 280, 260, 240, 220, 200]
+out_dir: runs/metropolis/tord
+chains:
+  - {name: TaW_cool_s0, mode: cool, seed: 0, start: random}
+  - {name: TaW_cool_s1, mode: cool, seed: 1, start: random}
+  - name: TaW_heat_s0
+    mode: heat
+    seed: 0
+    start: {snapshot: runs/metropolis/tord/TaW_cool_s0.snapshots.npz, T: 200}
+  - name: TaW_heat_s1
+    mode: heat
+    seed: 1
+    start: {snapshot: runs/metropolis/tord/TaW_cool_s1.snapshots.npz, T: 200}

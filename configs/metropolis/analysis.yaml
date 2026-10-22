@@ -1,0 +1,59 @@
+# Quantities the paper reads from the Metropolis chains (module docstring of
+# gnn_gym.metropolis.analysis lists the output files).
+#   python -m gnn_gym.metropolis.analysis configs/metropolis/analysis.yaml
+model: models/MoNbTaW/de_L2_s0.pt      # species codes of the stored configurations
+out_dir: results/metropolis
+runs:
+  # chain CSVs and snapshots of the T_ord campaign, written by
+  # configs/metropolis/tord_<system>.yaml (or taken from the archive)
+  tord: runs/metropolis/tord
+  # per-sweep traces of the campaign and of the two-start chains
+  tord_traces: runs/metropolis/tord
+  two_start: runs/metropolis/two_start
+
+# chains of configs/metropolis/tord_<system>.yaml, stem <system>_<chain>
+tord_chains: [cool_s0, cool_s1, heat_s0, heat_s1]
+
+systems:
+  MoNbTaW:
+    lead_pair: Mo-Ta            # strongest pair; model element order
+    # The four chains agree in alpha_1 (within 0.01) and in E (within about
+    # 0.1 meV/atom) from this temperature up; alpha_eq for the KMC starts here.
+    equilibrated_from_K: 380
+    lowT: {temperatures: [300], pairs: [Mo-Ta, Mo-Mo, Ta-Ta, Nb-Nb, W-W]}
+  TaW:
+    lead_pair: Ta-W
+    equilibrated_from_K: 200
+    lowT: {temperatures: [300, 400, 460], pairs: [Ta-W], wave_element: Ta}
+
+# configs/metropolis/two_start.yaml, stem <system>_eq_T<T>_<start>
+two_start:
+  starts: [cooled, ordered]
+  temperatures: {MoNbTaW: [700, 500, 300, 200], TaW: [700, 400, 300, 200]}
+
+# temperatures of the KMC runs, at which alpha_eq is interpolated
+kmc_temperatures: [700, 900, 1100, 1300, 1500]
+
+# Fantin et al. (2024): EXAFS after 24 h at 2273 K, fraction of 4d neighbours;
+# compared with the highest temperature of the chains, all four chains
+exafs:
+  measurement: data/literature/fantin2024_exafs.csv
+  system: MoNbTaW
+  temperature: 2000
+  group: [Mo, Nb]
+
+# Figure of the low-temperature states: one (001) double layer (corner plane
+# z0 and body-centre plane z0 + 1) of the cooling chain at 300 K; a site is
+# drawn as part of a B2 domain if |local B2 order| > thresh with at least
+# nmin pair atoms among the site and its eight neighbours.
+lowT_maps:
+  temperature: 300
+  chain: cool_s0
+  layer_z0: 0
+  thresh: 0.5
+  nmin: 4
+  panels:
+    - {name: a, system: TaW, pair: [Ta, W], structure: b2, size: 12}
+    - {name: b, system: TaW, pair: [Ta, W]}
+    - {name: c, system: MoNbTaW, pair: [Mo, Ta]}
+  structure_factor: {system: TaW, element: Ta}

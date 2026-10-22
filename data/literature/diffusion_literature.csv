@@ -1,0 +1,9 @@
+element,reference,bibkey,year,tracer_method,T_min_K,T_max_K,term,D0_cm2_s,Q_kJ_mol,combine,T_range_verified,note,show
+W,Mundy et al.,mundy1978,1978,W-185 sectioning,1705,3409,LT,0.04,526,sum,no,two-exponential fit over the whole range; LT = monovacancy term; HT = second term attributed to divacancies,yes
+W,Mundy et al.,mundy1978,1978,W-185 sectioning,1705,3409,HT,46,666,sum,no,second exponential of the same fit,yes
+Nb,Einziger et al.,einziger1978,1978,Nb-95 sectioning,1354,2695,LT,0.008,349,sum,no,two-exponential fit over the whole range; LT = monovacancy term,yes
+Nb,Einziger et al.,einziger1978,1978,Nb-95 sectioning,1354,2695,HT,3.7,438,sum,no,second exponential of the same fit,yes
+Mo,Maier et al.,maier1979,1979,Mo-99 sectioning,1360,2773,single,0.18,406,single,no,single Arrhenius line; to be checked against the two-exponential fit of the abstract,yes
+Mo,Askill and Tomlin,askill1963,1963,Mo-99,2155,2540,single,0.5,405,single,no,range to be confirmed from the paper,no
+Mo,Bronfin et al.,bronfin1960,1960,Mo-99,1850,2350,single,0.5,460,single,no,D0 given as ~0.5 in the source; range to be confirmed,no
+Ta,Pawel and Lundy,pawel1965,1965,Ta-182 sectioning,1523,2473,single,1.24,413,single,no,range to be confirmed from the paper (1250-2200 C assumed),yes

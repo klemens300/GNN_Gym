@@ -1,0 +1,12 @@
+# Order built by vacancy diffusion (Results, order reached by vacancy
+# diffusion; order column of Table kmc; Fig. order_kinetics).
+#   python -m gnn_gym.metropolis.analysis configs/metropolis/analysis.yaml
+#   python -m gnn_gym.analysis.analyze_campaign configs/analysis/campaign_alloys.yaml
+#   python -m gnn_gym.analysis.order_kinetics configs/analysis/order_kinetics.yaml
+campaign: results/kmc/campaign
+alpha_eq: results/metropolis/alpha_eq_kmc.csv
+lead_pair: {MoNbTaW: Mo-Ta, TaW: Ta-W}
+temperatures: [700, 900, 1100, 1300, 1500]   # Ta-W 500 K is not used (limit cycle)
+end_fraction: 0.05        # alpha_1 at the end of a run: last 5 % of its curve
+step_max: 500000          # Fig. order_kinetics: first 5e5 steps of every run
+out_dir: results/kmc

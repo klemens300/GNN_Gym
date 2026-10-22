@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the article below."
+title: "GNN_Gym"
+version: 1.0.0
+license: MIT
+repository-code: "https://github.com/klemens300/GNN_Gym"
+authors:
+  - family-names: Lechner
+    given-names: Klemens
+    affiliation: "Montanuniversität Leoben"
+preferred-citation:
+  type: article
+  title: "A graph neural network surrogate for the investigation of kinetic freezing in the Mo-Nb-Ta-W"
+  authors:
+    - family-names: Lechner
+      given-names: Klemens
+    - family-names: Zhang
+      given-names: Jiyao
+    - family-names: Wagatha
+      given-names: Peter
+    - family-names: Knabl
+      given-names: Wolfram
+    - family-names: Clemens
+      given-names: Helmut
+    - family-names: Holec
+      given-names: David
+  year: 2026

@@ -1,0 +1,14 @@
+# Tables of the alloy KMC campaigns (Mo-Nb-Ta-W and Ta-W, escape layer on).
+#   python -m gnn_gym.metropolis.analysis configs/metropolis/analysis.yaml
+#   python -m gnn_gym.analysis.analyze_campaign configs/analysis/campaign_alloys.yaml
+runs:
+  - runs/escape/kmc_*
+  - runs/escape_local/kmc_*
+  - runs/escape_s1/kmc_*
+  - runs/escape_s2/kmc_*
+out_dir: results/kmc/campaign
+nsub: 400                 # alpha_1(t) points per run in campaign_alpha.csv
+# Equilibrium alpha_1 for the fits with alpha_inf pinned (tau_*_fixed columns,
+# the ordering times of the paper): cooling branches of the Metropolis
+# campaign, mean over the two seeds, at the KMC temperatures.
+alpha_eq: results/metropolis/alpha_eq_kmc.csv

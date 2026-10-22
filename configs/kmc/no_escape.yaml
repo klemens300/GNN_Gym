@@ -1,0 +1,23 @@
+# Mo-Nb-Ta-W without the escape layer: the plain BKL reference the escape
+# layer is compared with (same start configuration and random-number stream
+# as escape_local.yaml, which has the same seeds), and the 700 K run whose
+# clock stalls in a two-site basin.
+#   python -m gnn_gym.kmc.campaign configs/kmc/no_escape.yaml
+campaign:
+  runs_dir: runs/no_escape
+  de_model: models/MoNbTaW/de_L2_s0.pt
+  bsym_model: models/MoNbTaW/bsym_site_s0.pt
+
+defaults:
+  supercell_size: 12
+  n_steps: 500000
+  attempt_frequency_Hz: 1.0e+13
+  escape: false
+  snapshot_every: 500
+  checkpoint_every: 2000
+  progress_every: 5000
+
+points:
+  - {system: MoNbTaW, T_K: 700, seed: 742}
+  - {system: MoNbTaW, T_K: 900, seed: 942}
+  - {system: MoNbTaW, T_K: 1100, seed: 1142}

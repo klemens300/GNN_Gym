@@ -1,0 +1,27 @@
+# Cost of a KMC step (Table "cost of one migration barrier") and of the
+# campaign of the paper.
+#   python -m gnn_gym.validation.speed configs/validation/speed.yaml
+de_model: models/MoNbTaW/de_L2_s0.pt
+bsym_model: models/MoNbTaW/bsym_site_s0.pt
+system: MoNbTaW
+seed: 42
+cell_sizes: [12, 16]          # the halo cost must not grow with the cell
+predictor_calls: 200          # timed calls per variant (after 10 warm-up)
+engine:
+  temperatures_K: [700, 1100, 1500]
+  run:                        # production settings of the campaigns
+    supercell_size: 12
+    n_steps: 4000
+    escape: true
+    snapshot_every: 500
+    checkpoint_every: 2000
+    progress_every: 0
+campaign:
+  # the 57 runs of 5e5 steps and four of 2e6 steps (alloys and pure metals)
+  configs: [configs/kmc/escape_local.yaml, configs/kmc/escape.yaml,
+            configs/kmc/escape_s1.yaml, configs/kmc/escape_s2.yaml,
+            configs/kmc/pure_s0.yaml, configs/kmc/pure_s1.yaml,
+            configs/kmc/pure_s2.yaml]
+  umlip_neb_s_per_barrier: 60   # mean uMLIP-NEB time per barrier of the
+                                # reference data set (7^3 cells, NVIDIA L40)
+out: results/validation/speed.json

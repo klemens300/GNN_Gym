@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gnn-gym"
+version = "1.0.0"
+description = "Learned lattice model of vacancy migration barriers with kinetic and Metropolis Monte Carlo for multicomponent alloys"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Klemens Lechner", email = "klemens.lechner@unileoben.ac.at"}]
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "torch>=2.1",
+    "pyyaml>=6.0",
+    "pandas>=2.0",
+    "matplotlib>=3.7",
+]
+
+[project.optional-dependencies]
+# reference calculations with the uMLIP (dataset, calibration, validation)
+oracle = ["ase>=3.23", "fairchem-core>=2.14", "matscipy>=1.0"]
+test = ["pytest>=7"]
+
+[project.urls]
+Repository = "https://github.com/klemens300/GNN_Gym"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

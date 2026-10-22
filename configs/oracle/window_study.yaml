@@ -1,0 +1,17 @@
+# Cell-size convergence of the jump labels (paper Sec. "Reference data": at
+# 7^3 dE and B_sym are converged to 4.9 +- 1.0 and 4.6 +- 0.9 meV, the 4^3
+# cell carries 46 and 33 meV).
+#   python -m gnn_gym.oracle.window_study configs/oracle/window_study.yaml run       # ~11 GPU-h
+#   python -m gnn_gym.oracle.window_study configs/oracle/window_study.yaml analyse
+recipe: configs/oracle/recipe.yaml          # uMLIP
+system: MoNbTaW                             # equiatomic parent decoration
+parent_size: 12
+sizes: [3, 4, 5, 6, 7, 8, 9, 10, 12]
+n_env: 40
+seed_base: 800000                           # environment e uses seed_base + e
+lattice_parameter_A: 3.239177462884154      # fixed box, the same for every window
+relax_fmax: 0.01
+neb: {n_images: 7, fmax: 0.02, method: improvedtangent, k: 0.1, climb: true, steps: 500}
+data: data/oracle/window_MoNbTaW.csv
+plateau_from: 8                             # reference: mean over n >= 8
+results: results/oracle/window_convergence.json
