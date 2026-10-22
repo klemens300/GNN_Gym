@@ -6,7 +6,7 @@ it. This repository contains the code, models and data of
 
 > K. Lechner, J. Zhang, P. Wagatha, W. Knabl, H. Clemens, D. Holec,
 > *A graph neural network surrogate for the investigation of kinetic freezing
-> in the Mo-Nb-Ta-W* (2026).
+> in the Mo-Nb-Ta-W system* (2026).
 
 ## What it does
 

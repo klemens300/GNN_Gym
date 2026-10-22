@@ -10,7 +10,7 @@ authors:
     affiliation: "Montanuniversität Leoben"
 preferred-citation:
   type: article
-  title: "A graph neural network surrogate for the investigation of kinetic freezing in the Mo-Nb-Ta-W"
+  title: "A graph neural network surrogate for the investigation of kinetic freezing in the Mo-Nb-Ta-W system"
   authors:
     - family-names: Lechner
       given-names: Klemens
